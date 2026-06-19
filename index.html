@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fair Lottery - 公平なくじ</title>
+  <meta name="description" content="人数や役割を自由に設定できる、明確に公平なくじアプリです。">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+JP:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="background-elements">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
+  <div class="app-container">
+    <header>
+      <h1>Fair Lottery</h1>
+      <p>明確に公平な、役割決め・くじ引きアプリ</p>
+    </header>
+
+    <main>
+      <!-- 1. 設定画面 -->
+      <section id="setup-section" class="glass-panel active-section">
+        <!-- モード選択 -->
+        <div class="form-group">
+          <h2>モードを選択</h2>
+          <div class="tabs" id="mode-tabs">
+            <button class="tab active" data-mode="normal">くじ引き・役割決め</button>
+            <button class="tab" data-mode="seating">席替え</button>
+          </div>
+        </div>
+
+        <!-- 1. 参加者設定 -->
+        <div class="form-group">
+          <h2>1. 参加者を設定</h2>
+          <div class="tabs">
+            <button class="tab active" data-target="names-input">名前で入力</button>
+            <button class="tab" data-target="number-input">人数で指定</button>
+          </div>
+          
+          <div id="names-input" class="tab-content active">
+            <textarea id="participants-text" placeholder="参加者の名前を改行で入力してください...&#10;Alice&#10;Bob&#10;Charlie"></textarea>
+          </div>
+          <div id="number-input" class="tab-content hidden">
+            <div class="number-input-wrapper">
+              <button id="num-decrease">-</button>
+              <input type="number" id="participants-number" min="2" max="100" value="5">
+              <button id="num-increase">+</button>
+            </div>
+            <p class="hint">「参加者1」「参加者2」...と自動で割り当てられます</p>
+          </div>
+          <p class="summary-text">現在の参加人数: <span id="participant-count-display">0</span>人</p>
+        </div>
+
+        <!-- 2a. 役割を設定（通常モード用） -->
+        <div class="form-group mode-content" id="normal-mode-content">
+          <h2>2. 役割を設定</h2>
+          <div class="role-actions-wrapper" style="display: flex; gap: 0.8rem; margin-bottom: 1rem; flex-wrap: wrap;">
+            <button id="add-role-btn" class="secondary-btn">+ 役割を追加</button>
+            <button id="auto-number-btn" class="secondary-btn">🔢 1〜Nの連番を自動設定</button>
+          </div>
+          <div id="roles-container">
+            <!-- 役割行が追加される -->
+          </div>
+          
+          <div class="summary">
+            <p>合計役割数: <span id="total-roles-display">0</span> / <span class="participant-count-display">0</span></p>
+            <p id="role-warning" class="warning-text"></p>
+          </div>
+        </div>
+
+        <!-- 2b. 席配置を設定（席替えモード用） -->
+        <div class="form-group mode-content hidden-section" id="seating-mode-content">
+          <h2>2. 席の配置を設定</h2>
+          <div class="seating-input-group" style="display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <label for="seating-rows">行（縦）:</label>
+              <input type="number" id="seating-rows" min="1" max="15" value="5" style="width: 70px; background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); padding: 0.5rem; border-radius: 8px; color: #fff; text-align: center;">
+            </div>
+            <div style="font-size: 1.5rem; font-weight: bold; color: var(--text-secondary);">×</div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <label for="seating-cols">列（横）:</label>
+              <input type="number" id="seating-cols" min="1" max="15" value="6" style="width: 70px; background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); padding: 0.5rem; border-radius: 8px; color: #fff; text-align: center;">
+            </div>
+            <button id="auto-seating-btn" class="secondary-btn" style="margin-left: auto;">人数に自動で合わせる</button>
+          </div>
+          <div class="summary" style="margin-top: 1rem;">
+            <p>総席数: <span id="total-seats-display">30</span>席 （参加者: <span class="participant-count-display">0</span>人）</p>
+            <p id="seating-warning" class="warning-text"></p>
+          </div>
+        </div>
+
+        <!-- オプション設定 -->
+        <div class="form-group" style="margin-top: 2rem; border-top: 1px solid var(--glass-border); padding-top: 1.5rem;">
+          <h2>オプション設定</h2>
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+            <label class="toggle-switch-wrapper" style="display: flex; align-items: center; gap: 0.8rem; cursor: pointer; user-select: none;">
+              <input type="checkbox" id="weight-toggle" style="width: 20px; height: 20px; cursor: pointer;">
+              <span style="font-weight: 600; color: #fff;">偏りを減らす重み付け（過去の履歴を考慮）</span>
+            </label>
+            <button id="reset-history-btn" class="secondary-btn" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: var(--danger-color); font-size: 0.9rem; padding: 0.5rem 1rem;">履歴をリセット</button>
+          </div>
+          <p class="hint" style="margin-top: 0.6rem; font-size: 0.85rem;">※結果をブラウザに最大5回分保存し、前後の席の偏りを減らします（前回と同じ席は自動で回避します）。</p>
+        </div>
+
+        <button id="start-btn" class="primary-btn pulse-glow">抽選スタート</button>
+      </section>
+
+      <!-- 2. アニメーション（シャッフル）画面 -->
+      <section id="animation-section" class="glass-panel hidden-section">
+        <div class="shuffle-container">
+          <div class="cards-animation">
+            <div class="card card-1"></div>
+            <div class="card card-2"></div>
+            <div class="card card-3"></div>
+          </div>
+          <h2 class="shuffling-text">Shuffling...</h2>
+          <div class="crypto-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lock-icon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            Secure random generation using window.crypto
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. 結果画面 -->
+      <section id="result-section" class="glass-panel hidden-section">
+        <h2 id="result-title">抽選結果</h2>
+        
+        <!-- 通常モード用結果画面 -->
+        <div id="normal-result-container">
+          <div class="result-sort-tabs" style="display: flex; justify-content: center; gap: 0.8rem; margin-bottom: 1.5rem;">
+            <button class="sort-tab active" data-sort="random">シャッフル順</button>
+            <button class="sort-tab" data-sort="name">名前順</button>
+            <button class="sort-tab" data-sort="role">番号・役割順</button>
+          </div>
+          <div class="result-scroll">
+            <ul id="result-list"></ul>
+          </div>
+        </div>
+
+        <!-- 席替えモード用結果画面 -->
+        <div id="seating-result-container" class="hidden-section">
+          <p class="seating-hint" style="text-align: center; margin-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.95rem; font-weight: 600;">💡 席をドラッグ＆ドロップして、自由に配置を入れ替えられます！</p>
+          <div class="teacher-desk-wrapper" style="text-align: center; margin-bottom: 2rem;">
+            <div class="teacher-desk" style="display: inline-block; padding: 0.6rem 2.5rem; background: rgba(255,255,255,0.08); border: 1px solid var(--glass-border); border-radius: 8px; font-weight: 800; color: var(--text-secondary); font-size: 0.95rem; letter-spacing: 0.2em;">教壇 (前)</div>
+          </div>
+          <div class="seating-scroll" style="overflow-x: auto; width: 100%; margin-bottom: 2.5rem; padding-bottom: 1rem;">
+            <div id="seating-grid" style="display: grid; gap: 0.8rem; margin: 0 auto; justify-content: center; width: max-content;">
+              <!-- 座席が動的に配置される -->
+            </div>
+          </div>
+        </div>
+
+        <div class="result-actions">
+          <button id="retry-btn" class="primary-btn">同じ設定でもう一度</button>
+          <button id="edit-btn" class="secondary-btn">設定を編集</button>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
