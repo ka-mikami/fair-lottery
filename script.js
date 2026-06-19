@@ -74,32 +74,36 @@ let state = {
 // Initialize
 function init() {
   // Load history from localStorage
-  const savedHistory = localStorage.getItem('seatingHistory');
-  if (savedHistory) {
-    try {
+  try {
+    const savedHistory = localStorage.getItem('seatingHistory');
+    if (savedHistory) {
       state.history = JSON.parse(savedHistory);
-    } catch (e) {
-      state.history = [];
     }
+  } catch (e) {
+    state.history = [];
   }
 
   // Load participants text history
-  const savedParticipantsHistory = localStorage.getItem('participantsTextHistory');
-  if (savedParticipantsHistory) {
-    try {
+  try {
+    const savedParticipantsHistory = localStorage.getItem('participantsTextHistory');
+    if (savedParticipantsHistory) {
       state.participantsHistory = JSON.parse(savedParticipantsHistory);
-    } catch (e) {
-      state.participantsHistory = [];
     }
+  } catch (e) {
+    state.participantsHistory = [];
   }
 
   // Load toggle state from localStorage
-  const savedWeighting = localStorage.getItem('seatingUseWeighting');
-  if (savedWeighting !== null) {
-    state.useWeighting = savedWeighting === 'true';
-    if (els.weightToggle) {
-      els.weightToggle.checked = state.useWeighting;
+  try {
+    const savedWeighting = localStorage.getItem('seatingUseWeighting');
+    if (savedWeighting !== null) {
+      state.useWeighting = savedWeighting === 'true';
+      if (els.weightToggle) {
+        els.weightToggle.checked = state.useWeighting;
+      }
     }
+  } catch (e) {
+    state.useWeighting = false;
   }
 
   bindEvents();
@@ -241,7 +245,9 @@ function bindEvents() {
   if (els.weightToggle) {
     els.weightToggle.addEventListener('change', e => {
       state.useWeighting = e.target.checked;
-      localStorage.setItem('seatingUseWeighting', state.useWeighting);
+      try {
+        localStorage.setItem('seatingUseWeighting', state.useWeighting);
+      } catch (err) {}
     });
   }
 
@@ -249,7 +255,9 @@ function bindEvents() {
     els.resetHistoryBtn.addEventListener('click', () => {
       if (confirm('過去の座席履歴をすべて削除してもよろしいですか？（重み付けの基準がリセットされます）')) {
         state.history = [];
-        localStorage.removeItem('seatingHistory');
+        try {
+          localStorage.removeItem('seatingHistory');
+        } catch (err) {}
         alert('履歴をリセットしました。');
       }
     });
@@ -638,7 +646,9 @@ function saveSeatingResultToHistory(rows, cols) {
     state.history.shift();
   }
   
-  localStorage.setItem('seatingHistory', JSON.stringify(state.history));
+  try {
+    localStorage.setItem('seatingHistory', JSON.stringify(state.history));
+  } catch (err) {}
 }
 
 function startLottery() {
@@ -1129,7 +1139,9 @@ function saveParticipantsTextToHistory() {
     state.participantsHistory.pop();
   }
   
-  localStorage.setItem('participantsTextHistory', JSON.stringify(state.participantsHistory));
+  try {
+    localStorage.setItem('participantsTextHistory', JSON.stringify(state.participantsHistory));
+  } catch (err) {}
   updateParticipantsHistorySelect();
 }
 
