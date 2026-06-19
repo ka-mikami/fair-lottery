@@ -67,6 +67,7 @@ let state = {
   currentSort: 'random', // 'random', 'name', 'role'
   history: [], // Seating history: max 5 items
   participantsHistory: [], // Participants text history: max 5 items
+  normalHistory: [], // Normal lottery history: max 5 items
   useWeighting: false,
   selectedSeatIndex: null // for mobile tap-to-swap
 };
@@ -93,6 +94,16 @@ function init() {
     state.participantsHistory = [];
   }
 
+  // Load normal lottery history
+  try {
+    const savedNormalHistory = localStorage.getItem('normalLotteryHistory');
+    if (savedNormalHistory) {
+      state.normalHistory = JSON.parse(savedNormalHistory);
+    }
+  } catch (e) {
+    state.normalHistory = [];
+  }
+
   // Load toggle state from localStorage
   try {
     const savedWeighting = localStorage.getItem('seatingUseWeighting');
@@ -106,8 +117,24 @@ function init() {
     state.useWeighting = false;
   }
 
+  // Load saved mode from localStorage
+  try {
+    const savedMode = localStorage.getItem('lotteryMode');
+    if (savedMode === 'normal' || savedMode === 'seating') {
+      state.mode = savedMode;
+    }
+  } catch (e) {}
+
   bindEvents();
+  
+  // Sync UI to the loaded mode
+  if (els.modeTabs) {
+    const btn = els.modeTabs.querySelector(`button[data-mode="${state.mode}"]`);
+    if (btn) btn.click();
+  }
+  
   updateParticipantsHistorySelect();
+  updateResultsHistoryList();
   renderRoles();
   updateParticipantCount();
 }
@@ -121,6 +148,10 @@ function bindEvents() {
         buttons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         state.mode = btn.dataset.mode;
+        
+        try {
+          localStorage.setItem('lotteryMode', state.mode);
+        } catch (err) {}
         
         // Toggle setup forms
         els.modeContents.forEach(content => {
@@ -253,11 +284,14 @@ function bindEvents() {
 
   if (els.resetHistoryBtn) {
     els.resetHistoryBtn.addEventListener('click', () => {
-      if (confirm('過去の座席履歴をすべて削除してもよろしいですか？（重み付けの基準がリセットされます）')) {
+      if (confirm('過去のすべての結果履歴（くじ引き・席替え）を削除してもよろしいですか？（偏り防止の基準もリセットされます）')) {
         state.history = [];
+        state.normalHistory = [];
         try {
           localStorage.removeItem('seatingHistory');
+          localStorage.removeItem('normalLotteryHistory');
         } catch (err) {}
+        updateResultsHistoryList();
         alert('履歴をリセットしました。');
       }
     });
@@ -688,6 +722,9 @@ function startLottery() {
       name: p,
       role: shuffledRoles[i]
     }));
+
+    // Save normal lottery result to history
+    saveNormalLotteryToHistory();
   } else {
     // Seating mode lottery
     const rows = parseInt(els.seatingRows.value) || 0;
@@ -1191,6 +1228,7 @@ function resetToHome() {
 
   // 6. Update counts and warnings
   updateParticipantCount();
+  updateResultsHistoryList();
   
   // 7. Reset results and sorting states
   state.finalResult = [];
@@ -1202,6 +1240,163 @@ function resetToHome() {
   els.resultSection.classList.replace('active-section', 'hidden-section');
   els.setupSection.classList.replace('hidden-section', 'active-section');
 }
+
+function saveNormalLotteryToHistory() {
+  const newEvent = {
+    timestamp: Date.now(),
+    result: [...state.finalResult]
+  };
+  
+  if (!state.normalHistory) {
+    state.normalHistory = [];
+  }
+  
+  state.normalHistory.push(newEvent);
+  
+  while (state.normalHistory.length > 5) {
+    state.normalHistory.shift();
+  }
+  
+  try {
+    localStorage.setItem('normalLotteryHistory', JSON.stringify(state.normalHistory));
+  } catch (e) {}
+  
+  updateResultsHistoryList();
+}
+
+function updateResultsHistoryList() {
+  const normalContainer = document.getElementById('normal-history-list');
+  const seatingContainer = document.getElementById('seating-history-list');
+  
+  // Update normal lottery history
+  if (normalContainer) {
+    normalContainer.innerHTML = '';
+    if (!state.normalHistory || state.normalHistory.length === 0) {
+      normalContainer.innerHTML = '<p class="hint" style="text-align: center; padding: 1rem 0;">履歴はありません</p>';
+    } else {
+      // Show newest first
+      [...state.normalHistory].reverse().forEach((h, revIndex) => {
+        const index = state.normalHistory.length - 1 - revIndex;
+        
+        const row = document.createElement('div');
+        row.className = 'history-item-row';
+        
+        const date = new Date(h.timestamp);
+        const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+        
+        const roles = h.result.map(r => r.role);
+        const uniqueRoles = [...new Set(roles)].filter(r => r !== 'その他');
+        const roleSummary = uniqueRoles.slice(0, 2).join(', ') + (uniqueRoles.length > 2 ? '...' : '');
+        
+        row.innerHTML = `
+          <div class="history-item-info">
+            <span class="history-item-time">${dateStr}</span>
+            <span>参加者: ${h.result.length}人 ${roleSummary ? `(${roleSummary})` : ''}</span>
+          </div>
+          <button class="history-item-btn" onclick="loadNormalHistory(${index})">結果を見る</button>
+        `;
+        normalContainer.appendChild(row);
+      });
+    }
+  }
+  
+  // Update seating history
+  if (seatingContainer) {
+    seatingContainer.innerHTML = '';
+    if (!state.history || state.history.length === 0) {
+      seatingContainer.innerHTML = '<p class="hint" style="text-align: center; padding: 1rem 0;">履歴はありません</p>';
+    } else {
+      // Show newest first
+      [...state.history].reverse().forEach((h, revIndex) => {
+        const index = state.history.length - 1 - revIndex;
+        
+        const row = document.createElement('div');
+        row.className = 'history-item-row';
+        
+        const date = new Date(h.timestamp);
+        const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+        
+        row.innerHTML = `
+          <div class="history-item-info">
+            <span class="history-item-time">${dateStr}</span>
+            <span>配置: ${h.rows}行×${h.cols}列 (計${h.result.length}人)</span>
+          </div>
+          <button class="history-item-btn" onclick="loadSeatingHistory(${index})">結果を見る</button>
+        `;
+        seatingContainer.appendChild(row);
+      });
+    }
+  }
+}
+
+function loadNormalHistoryItem(index) {
+  if (!state.normalHistory || !state.normalHistory[index]) return;
+  const item = state.normalHistory[index];
+  
+  state.finalResult = item.result;
+  state.mode = 'normal';
+  
+  // Sync UI tab
+  if (els.modeTabs) {
+    const btn = els.modeTabs.querySelector('button[data-mode="normal"]');
+    if (btn) {
+      els.modeTabs.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+  }
+  
+  els.setupSection.classList.replace('active-section', 'hidden-section');
+  els.resultSection.classList.replace('hidden-section', 'active-section');
+  showResult();
+  
+  // Overwrite title for history view
+  const date = new Date(item.timestamp);
+  const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  els.resultTitle.innerHTML = `抽選結果 <span style="font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); margin-left: 0.5rem; background: rgba(255,255,255,0.08); padding: 0.2rem 0.5rem; border-radius: 6px;">${dateStr} の履歴</span>`;
+}
+
+function loadSeatingHistoryItem(index) {
+  if (!state.history || !state.history[index]) return;
+  const item = state.history[index];
+  
+  const rows = item.rows;
+  const cols = item.cols;
+  
+  if (els.seatingRows && els.seatingCols) {
+    els.seatingRows.value = rows;
+    els.seatingCols.value = cols;
+  }
+  
+  const totalSeats = rows * cols;
+  state.finalSeatingResult = Array.from({ length: totalSeats }, () => null);
+  item.result.forEach(r => {
+    state.finalSeatingResult[r.seatIndex] = r.name;
+  });
+  
+  state.mode = 'seating';
+  
+  // Sync UI tab
+  if (els.modeTabs) {
+    const btn = els.modeTabs.querySelector('button[data-mode="seating"]');
+    if (btn) {
+      els.modeTabs.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+  }
+  
+  els.setupSection.classList.replace('active-section', 'hidden-section');
+  els.resultSection.classList.replace('hidden-section', 'active-section');
+  showResult();
+  
+  // Overwrite title for history view
+  const date = new Date(item.timestamp);
+  const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  els.resultTitle.innerHTML = `座席配置 <span style="font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); margin-left: 0.5rem; background: rgba(255,255,255,0.08); padding: 0.2rem 0.5rem; border-radius: 6px;">${dateStr} の履歴</span>`;
+}
+
+// Bind load functions to global window object
+window.loadNormalHistory = loadNormalHistoryItem;
+window.loadSeatingHistory = loadSeatingHistoryItem;
 
 // Start
 init();
