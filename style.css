@@ -401,6 +401,12 @@ textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0
   background: rgba(236, 72, 153, 0.1);
   transform: scale(1.05);
 }
+.seat.selected {
+  border: 2px dashed #ec4899;
+  background: rgba(236, 72, 153, 0.15);
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(236, 72, 153, 0.3);
+}
 
 /* 画面幅が狭いデバイス用の左右はみ出し対策 */
 @media (max-width: 600px) {

@@ -63,7 +63,8 @@ let state = {
   finalSeatingResult: [], // for seating mode
   currentSort: 'random', // 'random', 'name', 'role'
   history: [], // Seating history: max 5 items
-  useWeighting: false
+  useWeighting: false,
+  selectedSeatIndex: null // for mobile tap-to-swap
 };
 
 // Initialize
@@ -430,6 +431,7 @@ function saveSeatingResultToHistory(rows, cols) {
 }
 
 function startLottery() {
+  state.selectedSeatIndex = null; // Reset selection state
   const participants = getParticipants();
   if (participants.length === 0) return;
 
@@ -648,6 +650,9 @@ function showResult() {
       seatDiv.addEventListener('drop', handleDrop);
       seatDiv.addEventListener('dragend', handleDragEnd);
 
+      // Tap-to-Swap Click Event
+      seatDiv.addEventListener('click', handleSeatClick);
+
       els.seatingGrid.appendChild(seatDiv);
     });
   }
@@ -655,7 +660,62 @@ function showResult() {
   els.resultSection.classList.replace('hidden-section', 'active-section');
 }
 
-// Drag and Drop Logic
+// Seating Swap Logic
+function swapSeats(draggedIndex, targetIndex) {
+  if (draggedIndex !== null && draggedIndex !== targetIndex) {
+    // Swap elements in State
+    const temp = state.finalSeatingResult[draggedIndex];
+    state.finalSeatingResult[draggedIndex] = state.finalSeatingResult[targetIndex];
+    state.finalSeatingResult[targetIndex] = temp;
+    
+    // Swap contents in DOM
+    const sourceSeat = document.querySelector(`.seat[data-index="${draggedIndex}"]`);
+    const targetSeat = document.querySelector(`.seat[data-index="${targetIndex}"]`);
+    
+    if (sourceSeat && targetSeat) {
+      const sourceHTML = sourceSeat.innerHTML;
+      const sourceOccupied = sourceSeat.classList.contains('occupied');
+      const sourceEmpty = sourceSeat.classList.contains('empty');
+      const sourceTitle = sourceSeat.title || '';
+      
+      sourceSeat.innerHTML = targetSeat.innerHTML;
+      sourceSeat.classList.toggle('occupied', targetSeat.classList.contains('occupied'));
+      sourceSeat.classList.toggle('empty', targetSeat.classList.contains('empty'));
+      sourceSeat.title = targetSeat.title || '';
+      
+      targetSeat.innerHTML = sourceHTML;
+      targetSeat.classList.toggle('occupied', sourceOccupied);
+      targetSeat.classList.toggle('empty', sourceEmpty);
+      targetSeat.title = sourceTitle;
+    }
+    
+    // Sync with seating history
+    const rows = parseInt(els.seatingRows.value) || 0;
+    const cols = parseInt(els.seatingCols.value) || 0;
+    updateHistoryAfterSwap(rows, cols);
+  }
+}
+
+function updateHistoryAfterSwap(rows, cols) {
+  if (state.history.length === 0) return;
+  
+  const result = [];
+  state.finalSeatingResult.forEach((person, idx) => {
+    if (person) {
+      result.push({
+        name: person,
+        seatIndex: idx,
+        zone: getZoneOfSeat(idx, rows, cols)
+      });
+    }
+  });
+  
+  // Update the latest event in history
+  state.history[state.history.length - 1].result = result;
+  localStorage.setItem('seatingHistory', JSON.stringify(state.history));
+}
+
+// Drag and Drop Event Handlers
 let draggedIndex = null;
 
 function handleDragStart(e) {
@@ -685,34 +745,7 @@ function handleDrop(e) {
   this.classList.remove('drag-over');
   
   const targetIndex = parseInt(this.dataset.index);
-  
-  if (draggedIndex !== null && draggedIndex !== targetIndex) {
-    // Swap elements in State
-    const temp = state.finalSeatingResult[draggedIndex];
-    state.finalSeatingResult[draggedIndex] = state.finalSeatingResult[targetIndex];
-    state.finalSeatingResult[targetIndex] = temp;
-    
-    // Swap contents in DOM
-    const sourceSeat = document.querySelector(`.seat[data-index="${draggedIndex}"]`);
-    const targetSeat = document.querySelector(`.seat[data-index="${targetIndex}"]`);
-    
-    if (sourceSeat && targetSeat) {
-      const sourceHTML = sourceSeat.innerHTML;
-      const sourceOccupied = sourceSeat.classList.contains('occupied');
-      const sourceEmpty = sourceSeat.classList.contains('empty');
-      const sourceTitle = sourceSeat.title || '';
-      
-      sourceSeat.innerHTML = targetSeat.innerHTML;
-      sourceSeat.classList.toggle('occupied', targetSeat.classList.contains('occupied'));
-      sourceSeat.classList.toggle('empty', targetSeat.classList.contains('empty'));
-      sourceSeat.title = targetSeat.title || '';
-      
-      targetSeat.innerHTML = sourceHTML;
-      targetSeat.classList.toggle('occupied', sourceOccupied);
-      targetSeat.classList.toggle('empty', sourceEmpty);
-      targetSeat.title = sourceTitle;
-    }
-  }
+  swapSeats(draggedIndex, targetIndex);
   return false;
 }
 
@@ -720,6 +753,33 @@ function handleDragEnd(e) {
   this.classList.remove('dragging');
   document.querySelectorAll('.seat').forEach(s => s.classList.remove('drag-over'));
   draggedIndex = null;
+}
+
+// Tap-to-Swap Event Handler
+function handleSeatClick() {
+  const clickedIndex = parseInt(this.dataset.index);
+  
+  if (state.selectedSeatIndex === null) {
+    // First seat selected
+    state.selectedSeatIndex = clickedIndex;
+    this.classList.add('selected');
+  } else if (state.selectedSeatIndex === clickedIndex) {
+    // Clicked the same seat, deselect
+    state.selectedSeatIndex = null;
+    this.classList.remove('selected');
+  } else {
+    // Second seat selected, perform swap
+    const sourceIndex = state.selectedSeatIndex;
+    const targetIndex = clickedIndex;
+    
+    const sourceSeat = document.querySelector(`.seat[data-index="${sourceIndex}"]`);
+    if (sourceSeat) {
+      sourceSeat.classList.remove('selected');
+    }
+    
+    state.selectedSeatIndex = null;
+    swapSeats(sourceIndex, targetIndex);
+  }
 }
 
 function escapeHTML(str) {
