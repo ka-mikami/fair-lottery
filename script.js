@@ -975,9 +975,14 @@ let draggedIndex = null;
 
 function handleDragStart(e) {
   draggedIndex = parseInt(this.dataset.index);
-  this.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', draggedIndex);
+  
+  // Use setTimeout to ensure the browser takes the drag ghost snapshot 
+  // before we apply the semi-transparent '.dragging' style to the original element.
+  setTimeout(() => {
+    this.classList.add('dragging');
+  }, 0);
 }
 
 function handleDragOver(e) {
