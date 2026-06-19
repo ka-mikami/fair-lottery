@@ -11,6 +11,7 @@ const els = {
   // Participants
   participantsText: document.getElementById('participants-text'),
   participantsNumber: document.getElementById('participants-number'),
+  participantsHistorySelect: document.getElementById('participants-history-select'),
   numDecrease: document.getElementById('num-decrease'),
   numIncrease: document.getElementById('num-increase'),
   participantCountDisplay: document.querySelectorAll('#participant-count-display, .participant-count-display'),
@@ -26,6 +27,7 @@ const els = {
   seatingRows: document.getElementById('seating-rows'),
   seatingCols: document.getElementById('seating-cols'),
   autoSeatingBtn: document.getElementById('auto-seating-btn'),
+  priorityMembersList: document.getElementById('priority-members-list'),
   totalSeatsDisplay: document.getElementById('total-seats-display'),
   seatingWarning: document.getElementById('seating-warning'),
   
@@ -63,6 +65,7 @@ let state = {
   finalSeatingResult: [], // for seating mode
   currentSort: 'random', // 'random', 'name', 'role'
   history: [], // Seating history: max 5 items
+  participantsHistory: [], // Participants text history: max 5 items
   useWeighting: false,
   selectedSeatIndex: null // for mobile tap-to-swap
 };
@@ -79,6 +82,16 @@ function init() {
     }
   }
 
+  // Load participants text history
+  const savedParticipantsHistory = localStorage.getItem('participantsTextHistory');
+  if (savedParticipantsHistory) {
+    try {
+      state.participantsHistory = JSON.parse(savedParticipantsHistory);
+    } catch (e) {
+      state.participantsHistory = [];
+    }
+  }
+
   // Load toggle state from localStorage
   const savedWeighting = localStorage.getItem('seatingUseWeighting');
   if (savedWeighting !== null) {
@@ -89,6 +102,7 @@ function init() {
   }
 
   bindEvents();
+  updateParticipantsHistorySelect();
   renderRoles();
   updateParticipantCount();
 }
@@ -236,6 +250,145 @@ function bindEvents() {
       }
     });
   }
+
+  // IME composition helper for auto-furigana assistant (supports multi-step typing like Lastname -> Firstname)
+  let lastKana = '';
+  let currentLineIndex = -1;
+  let lineKanjiBuffer = [];
+  let lineYomiBuffer = [];
+  let isComposing = false;
+
+  function getLineIndex(textarea) {
+    const pos = textarea.selectionStart;
+    const textBeforeCursor = textarea.value.slice(0, pos);
+    return textBeforeCursor.split('\n').length - 1;
+  }
+
+  function commitFuriganaForLine(lineIdx) {
+    if (lineIdx < 0 || lineKanjiBuffer.length === 0) return;
+    
+    const textarea = els.participantsText;
+    const lines = textarea.value.split('\n');
+    if (lineIdx >= lines.length) return;
+    
+    const lineText = lines[lineIdx];
+    
+    // Skip if the line already contains furigana in parentheses
+    if (/[（(][^）)]+[）)]/.test(lineText)) {
+      lineKanjiBuffer = [];
+      lineYomiBuffer = [];
+      return;
+    }
+    
+    // Ensure all typed parts are still present on the current line
+    const allKanjiPresent = lineKanjiBuffer.every(k => lineText.includes(k));
+    
+    if (allKanjiPresent) {
+      const hasSpace = /[\s　]/.test(lineText);
+      const joinedYomi = lineYomiBuffer.join(hasSpace ? ' ' : '');
+      const newLineText = lineText + `(${joinedYomi})`;
+      
+      const startPos = textarea.selectionStart;
+      const endPos = textarea.selectionEnd;
+      
+      lines[lineIdx] = newLineText;
+      textarea.value = lines.join('\n');
+      
+      const addedLength = newLineText.length - lineText.length;
+      textarea.selectionStart = startPos + addedLength;
+      textarea.selectionEnd = endPos + addedLength;
+      
+      updateParticipantCount();
+    }
+    
+    lineKanjiBuffer = [];
+    lineYomiBuffer = [];
+  }
+
+  if (els.participantsText) {
+    const textarea = els.participantsText;
+
+    textarea.addEventListener('compositionstart', () => {
+      isComposing = true;
+      lastKana = '';
+    });
+
+    textarea.addEventListener('compositionupdate', (e) => {
+      const text = e.data || '';
+      // Allow Hiragana, Katakana, Roman/Alpha during typing, spaces, and prolonged sound marks
+      const isKanaOrAlpha = /^[\u3040-\u309f\u30a0-\u30ff\uFF65-\uFF9F\u30fc\sA-Za-zａ-ｚＡ-Ｚ]*$/.test(text);
+      if (isKanaOrAlpha && text.trim().length > 0) {
+        lastKana = text;
+      }
+    });
+
+    textarea.addEventListener('compositionend', (e) => {
+      isComposing = false;
+      const determinedText = e.data || '';
+      const hasKanji = /[\u4e00-\u9faf\u3400-\u4dbf\u3005]/.test(determinedText);
+      
+      if (hasKanji && lastKana && determinedText !== lastKana) {
+        const lineIdx = getLineIndex(textarea);
+        
+        // If line changed, commit/clear previous line first
+        if (lineIdx !== currentLineIndex) {
+          commitFuriganaForLine(currentLineIndex);
+          currentLineIndex = lineIdx;
+        }
+        
+        lineKanjiBuffer.push(determinedText);
+        lineYomiBuffer.push(katakanaToHiragana(lastKana.trim()));
+      }
+      lastKana = '';
+    });
+
+    // Commit furigana when pressing Enter key (moving to next line)
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !isComposing) {
+        commitFuriganaForLine(currentLineIndex);
+      }
+    });
+
+    // Detect cursor or click movements changing the current editing line
+    const checkLineChange = () => {
+      const lineIdx = getLineIndex(textarea);
+      if (lineIdx !== currentLineIndex) {
+        commitFuriganaForLine(currentLineIndex);
+        currentLineIndex = lineIdx;
+      }
+    };
+
+    textarea.addEventListener('keyup', (e) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) {
+        checkLineChange();
+      }
+    });
+
+    textarea.addEventListener('click', checkLineChange);
+    textarea.addEventListener('blur', () => {
+      commitFuriganaForLine(currentLineIndex);
+      currentLineIndex = -1;
+    });
+  }
+
+  // Participants History selection
+  if (els.participantsHistorySelect) {
+    els.participantsHistorySelect.addEventListener('change', (e) => {
+      const idx = e.target.value;
+      if (idx !== '') {
+        const historyItem = state.participantsHistory[parseInt(idx)];
+        if (historyItem) {
+          if (els.participantsText.value.trim() !== '' && !confirm('現在の入力内容が履歴の内容で上書きされます。よろしいですか？')) {
+            e.target.value = '';
+            return;
+          }
+          els.participantsText.value = historyItem.text;
+          updateParticipantCount();
+          e.target.value = '';
+        }
+      }
+    });
+  }
 }
 
 function getParticipants() {
@@ -250,9 +403,63 @@ function getParticipants() {
   }
 }
 
+function renderPriorityMembers() {
+  if (!els.priorityMembersList) return;
+  
+  // 1. Save currently checked members
+  const checkedMembers = new Set();
+  els.priorityMembersList.querySelectorAll('input:checked').forEach(cb => {
+    checkedMembers.add(cb.value);
+  });
+  
+  // 2. Get current participants list
+  const participants = getParticipants();
+  
+  els.priorityMembersList.innerHTML = '';
+  
+  if (participants.length === 0) {
+    els.priorityMembersList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; grid-column: 1 / -1; text-align: center; margin: 0.5rem 0;">参加者を設定するとここにメンバーが表示されます</p>';
+    return;
+  }
+  
+  participants.forEach(name => {
+    const label = document.createElement('label');
+    label.style.cssText = 'display: flex; align-items: center; gap: 0.4rem; color: #fff; font-size: 0.85rem; cursor: pointer; background: rgba(255,255,255,0.03); padding: 0.3rem 0.5rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;';
+    label.title = name;
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'priority-member-checkbox';
+    checkbox.value = name;
+    if (checkedMembers.has(name)) {
+      checkbox.checked = true;
+    }
+    
+    // UI improvement: Change style on check
+    checkbox.addEventListener('change', () => {
+      label.style.background = checkbox.checked ? 'rgba(236,72,153,0.15)' : 'rgba(255,255,255,0.03)';
+      label.style.borderColor = checkbox.checked ? '#ec4899' : 'rgba(255,255,255,0.05)';
+    });
+    
+    if (checkbox.checked) {
+      label.style.background = 'rgba(236,72,153,0.15)';
+      label.style.borderColor = '#ec4899';
+    }
+    
+    const span = document.createElement('span');
+    span.textContent = getDisplayName(name);
+    span.style.cssText = 'overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+    
+    label.appendChild(checkbox);
+    label.appendChild(span);
+    els.priorityMembersList.appendChild(label);
+  });
+}
+
 function updateParticipantCount() {
   const count = getParticipants().length;
   els.participantCountDisplay.forEach(el => el.textContent = count);
+  renderPriorityMembers();
   updateValidation();
 }
 
@@ -432,6 +639,10 @@ function saveSeatingResultToHistory(rows, cols) {
 
 function startLottery() {
   state.selectedSeatIndex = null; // Reset selection state
+  
+  // Save participants list to history
+  saveParticipantsTextToHistory();
+  
   const participants = getParticipants();
   if (participants.length === 0) return;
 
@@ -472,9 +683,54 @@ function startLottery() {
     // Initialize seat mapping
     state.finalSeatingResult = Array.from({ length: totalSeats }, () => null);
 
+    // 1. Get priority members (checked ones)
+    const priorityMembers = [];
+    document.querySelectorAll('.priority-member-checkbox:checked').forEach(cb => {
+      priorityMembers.push(cb.value);
+    });
+
+    // 2. Identify priority seats (Front 2 rows: row < 2)
+    // If rows <= 2, prioritize row < 1 (front 1 row). If rows === 1, prioritize the whole row.
+    const priorityLimitRow = rows <= 2 ? 1 : 2;
+    const prioritySeats = [];
+    const regularSeats = [];
+    
+    for (let seatIdx = 0; seatIdx < totalSeats; seatIdx++) {
+      if (seatIdx >= participants.length) continue; // Only consider occupied seats (front-packing)
+      
+      const row = Math.floor(seatIdx / cols);
+      if (row < priorityLimitRow) {
+        prioritySeats.push(seatIdx);
+      } else {
+        regularSeats.push(seatIdx);
+      }
+    }
+
+    // 3. Shuffle priority members and assign them to randomly selected priority seats
+    const shuffledPriorityMembers = secureShuffle(priorityMembers);
+    const shuffledPrioritySeats = secureShuffle(prioritySeats);
+    
+    const assignedPriorityCount = Math.min(shuffledPriorityMembers.length, shuffledPrioritySeats.length);
+    
+    for (let i = 0; i < assignedPriorityCount; i++) {
+      const seatIdx = shuffledPrioritySeats[i];
+      const person = shuffledPriorityMembers[i];
+      state.finalSeatingResult[seatIdx] = person;
+    }
+
+    // If there are more priority members than priority seats, the remaining priority members become regular
+    const remainingPriorityMembers = shuffledPriorityMembers.slice(assignedPriorityCount);
+    
+    // 4. Gather remaining participants and seats
+    const remainingParticipants = participants.filter(p => !priorityMembers.includes(p) || remainingPriorityMembers.includes(p));
+    const remainingSeats = [
+      ...shuffledPrioritySeats.slice(assignedPriorityCount), // unused priority seats (if any)
+      ...regularSeats
+    ].sort((a, b) => a - b); // Keep front-packing order
+
+    // 5. Place remaining participants using weighted or simple random shuffle
     if (state.useWeighting && state.history.length > 0) {
-      // WEIGHTED SHUFFLE LOGIC
-      // 1. Get last seating layout mapping
+      // WEIGHTED SHUFFLE FOR REMAINING
       const lastSeatingMap = {};
       const lastEvent = state.history[state.history.length - 1];
       if (lastEvent) {
@@ -483,7 +739,6 @@ function startLottery() {
         });
       }
       
-      // 2. Summarize seating counts in history
       const historySummary = {};
       participants.forEach(p => {
         historySummary[p] = { frontCount: 0, middleCount: 0, backCount: 0 };
@@ -498,20 +753,17 @@ function startLottery() {
           }
         });
       });
+
+      const tempParticipants = [...remainingParticipants];
       
-      // 3. Place participants seat by seat
-      const remainingParticipants = [...participants];
-      
-      for (let seatIdx = 0; seatIdx < totalSeats; seatIdx++) {
-        if (seatIdx >= participants.length) break; // Fill front seats only (front-packing)
-        
+      remainingSeats.forEach(seatIdx => {
         const zone = getZoneOfSeat(seatIdx, rows, cols);
         
         let bestIdx = -1;
         let bestScore = -Infinity;
         
-        for (let i = 0; i < remainingParticipants.length; i++) {
-          const person = remainingParticipants[i];
+        for (let i = 0; i < tempParticipants.length; i++) {
+          const person = tempParticipants[i];
           const score = calculateSeatScore(person, seatIdx, zone, lastSeatingMap, historySummary);
           if (score > bestScore) {
             bestScore = score;
@@ -520,18 +772,17 @@ function startLottery() {
         }
         
         if (bestIdx !== -1) {
-          state.finalSeatingResult[seatIdx] = remainingParticipants[bestIdx];
-          remainingParticipants.splice(bestIdx, 1);
+          state.finalSeatingResult[seatIdx] = tempParticipants[bestIdx];
+          tempParticipants.splice(bestIdx, 1);
         }
-      }
+      });
     } else {
-      // SIMPLE RANDOM SHUFFLE
-      // Shuffle the participants
-      const shuffledParticipants = secureShuffle(participants);
-      
-      // Place participants in the front seats (0 to P - 1)
-      shuffledParticipants.forEach((person, index) => {
-        state.finalSeatingResult[index] = person;
+      // SIMPLE RANDOM SHUFFLE FOR REMAINING
+      const shuffledRemaining = secureShuffle(remainingParticipants);
+      remainingSeats.forEach((seatIdx, idx) => {
+        if (idx < shuffledRemaining.length) {
+          state.finalSeatingResult[seatIdx] = shuffledRemaining[idx];
+        }
       });
     }
     
@@ -574,7 +825,11 @@ function showResult() {
     // Apply sorting
     let displayResults = [...state.finalResult];
     if (state.currentSort === 'name') {
-      displayResults.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+      displayResults.sort((a, b) => {
+        const yomiA = getYomigana(a.name);
+        const yomiB = getYomigana(b.name);
+        return yomiA.localeCompare(yomiB, 'ja');
+      });
     } else if (state.currentSort === 'role') {
       displayResults.sort((a, b) => {
         const parsedA = parseInt(a.role);
@@ -597,7 +852,7 @@ function showResult() {
       li.style.animationDelay = `${index * 0.04}s`;
 
       li.innerHTML = `
-        <span class="result-name" title="${escapeHTML(res.name)}">${escapeHTML(res.name)}</span>
+        <span class="result-name" title="${escapeHTML(res.name)}">${escapeHTML(getDisplayName(res.name))}</span>
         <span class="result-role">${escapeHTML(res.role)}</span>
       `;
       els.resultList.appendChild(li);
@@ -631,7 +886,7 @@ function showResult() {
         seatDiv.title = person; // Full name tooltip on hover
         seatDiv.innerHTML = `
           <span class="seat-number">席 ${idx + 1}</span>
-          <span class="seat-name" title="${escapeHTML(person)}">${escapeHTML(person)}</span>
+          <span class="seat-name" title="${escapeHTML(person)}">${escapeHTML(getDisplayName(person))}</span>
         `;
       } else {
         seatDiv.classList.add('empty');
@@ -792,6 +1047,81 @@ function escapeHTML(str) {
       '"': '&quot;'
     }[tag])
   );
+}
+
+function katakanaToHiragana(str) {
+  return str.replace(/[\u30a1-\u30f6]/g, match => {
+    return String.fromCharCode(match.charCodeAt(0) - 0x60);
+  });
+}
+
+function getYomigana(name) {
+  const match = name.match(/[（(]([^）)]+)[）)]/);
+  if (match) {
+    return katakanaToHiragana(match[1].trim().toLowerCase());
+  }
+  return katakanaToHiragana(name.trim().toLowerCase());
+}
+
+function getDisplayName(name) {
+  return name.replace(/[（(][^）)]+[）)]/g, '').trim();
+}
+
+function updateParticipantsHistorySelect() {
+  const select = els.participantsHistorySelect;
+  if (!select) return;
+  
+  select.innerHTML = '<option value="">-- 履歴から読み込む --</option>';
+  
+  if (!state.participantsHistory || state.participantsHistory.length === 0) {
+    select.style.display = 'none';
+    return;
+  }
+  
+  select.style.display = 'block';
+  
+  state.participantsHistory.forEach((item, index) => {
+    const option = document.createElement('option');
+    option.value = index.toString();
+    
+    const lines = item.text.split('\n').map(n => getDisplayName(n)).filter(n => n.length > 0);
+    const count = lines.length;
+    const summary = lines.slice(0, 3).join(', ') + (count > 3 ? '...' : '');
+    
+    const date = new Date(item.timestamp);
+    const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    
+    option.textContent = `${summary} (計${count}人) - ${dateStr}`;
+    select.appendChild(option);
+  });
+}
+
+function saveParticipantsTextToHistory() {
+  if (state.inputType !== 'names-input') return;
+  
+  const text = els.participantsText.value.trim();
+  if (text.length === 0) return;
+  
+  if (!state.participantsHistory) {
+    state.participantsHistory = [];
+  }
+  
+  const existingIdx = state.participantsHistory.findIndex(h => h.text === text);
+  if (existingIdx !== -1) {
+    state.participantsHistory.splice(existingIdx, 1);
+  }
+  
+  state.participantsHistory.unshift({
+    text: text,
+    timestamp: Date.now()
+  });
+  
+  if (state.participantsHistory.length > 5) {
+    state.participantsHistory.pop();
+  }
+  
+  localStorage.setItem('participantsTextHistory', JSON.stringify(state.participantsHistory));
+  updateParticipantsHistorySelect();
 }
 
 // Start
