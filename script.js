@@ -49,7 +49,8 @@ const els = {
   seatingGrid: document.getElementById('seating-grid'),
   sortTabs: document.querySelectorAll('.sort-tab'),
   retryBtn: document.getElementById('retry-btn'),
-  editBtn: document.getElementById('edit-btn')
+  editBtn: document.getElementById('edit-btn'),
+  homeBtn: document.getElementById('home-btn')
 };
 
 // State
@@ -174,6 +175,9 @@ function bindEvents() {
     els.resultSection.classList.replace('active-section', 'hidden-section');
     els.setupSection.classList.replace('hidden-section', 'active-section');
   });
+  if (els.homeBtn) {
+    els.homeBtn.addEventListener('click', resetToHome);
+  }
 
   // Auto Numbering
   els.autoNumberBtn.addEventListener('click', () => {
@@ -1127,6 +1131,64 @@ function saveParticipantsTextToHistory() {
   
   localStorage.setItem('participantsTextHistory', JSON.stringify(state.participantsHistory));
   updateParticipantsHistorySelect();
+}
+
+function resetToHome() {
+  if (!confirm('入力データや現在の設定をすべてリセットしてホーム画面に戻ります。よろしいですか？')) {
+    return;
+  }
+
+  // 1. Clear participant inputs
+  els.participantsText.value = '';
+  els.participantsNumber.value = 5;
+  
+  // 2. Clear tab targets
+  state.inputType = 'names-input';
+  document.querySelectorAll('.tab[data-target]').forEach(tab => {
+    if (tab.dataset.target === 'names-input') tab.classList.add('active');
+    else tab.classList.remove('active');
+  });
+  
+  const namesInput = document.getElementById('names-input');
+  const numberInput = document.getElementById('number-input');
+  if (namesInput && numberInput) {
+    namesInput.classList.remove('hidden');
+    namesInput.classList.add('active');
+    numberInput.classList.remove('active');
+    numberInput.classList.add('hidden');
+  }
+
+  // 3. Reset roles to default
+  state.roles = [
+    { id: 1, name: '当たり', count: 1 },
+    { id: 2, name: 'ハズレ', count: 4 }
+  ];
+  state.nextRoleId = 3;
+  renderRoles();
+
+  // 4. Reset seating size to default
+  if (els.seatingRows && els.seatingCols) {
+    els.seatingRows.value = 5;
+    els.seatingCols.value = 6;
+  }
+  
+  // 5. Clear selected priority members
+  if (els.priorityMembersList) {
+    els.priorityMembersList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+  }
+
+  // 6. Update counts and warnings
+  updateParticipantCount();
+  
+  // 7. Reset results and sorting states
+  state.finalResult = [];
+  state.finalSeatingResult = [];
+  state.currentSort = 'random';
+  state.selectedSeatIndex = null;
+  
+  // 8. Navigate back to setup section
+  els.resultSection.classList.replace('active-section', 'hidden-section');
+  els.setupSection.classList.replace('hidden-section', 'active-section');
 }
 
 // Start
