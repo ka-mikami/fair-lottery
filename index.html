@@ -44,7 +44,13 @@
           </div>
           
           <div id="names-input" class="tab-content active">
-            <textarea id="participants-text" placeholder="参加者の名前を改行で入力してください...&#10;Alice&#10;Bob&#10;Charlie"></textarea>
+            <div class="history-select-wrapper" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+              <span class="hint" style="font-size: 0.8rem; margin: 0;">※改行区切りで入力</span>
+              <select id="participants-history-select" style="background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 6px; color: #fff; padding: 0.3rem 0.6rem; font-size: 0.85rem; max-width: 220px; outline: none; cursor: pointer; display: none;">
+                <option value="">-- 履歴から読み込む --</option>
+              </select>
+            </div>
+            <textarea id="participants-text" placeholder="参加者の名前を改行で入力してください...&#10;※(ふりがな)をつけると五十音順に並べ替えられます。&#10;山田 太郎(やまだ たろう)&#10;佐藤 花子(さとう はなこ)&#10;Alice(ありす)"></textarea>
           </div>
           <div id="number-input" class="tab-content hidden">
             <div class="number-input-wrapper">
@@ -89,7 +95,16 @@
             </div>
             <button id="auto-seating-btn" class="secondary-btn" style="margin-left: auto;">人数に自動で合わせる</button>
           </div>
-          <div class="summary" style="margin-top: 1rem;">
+          
+          <div class="priority-seating-group" style="margin-top: 1.5rem; border-top: 1px dashed var(--glass-border); padding-top: 1.2rem;">
+            <h3 style="font-size: 1.1rem; color: #fff; margin-bottom: 0.3rem;">前列優先配置メンバー（目の悪い方など）</h3>
+            <p class="hint" style="margin-bottom: 0.8rem; font-size: 0.8rem;">※チェックしたメンバーは、自動的に「前2列（または最前列）」のいずれかに優先配置されます。</p>
+            <div id="priority-members-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.5rem; max-height: 130px; overflow-y: auto; background: rgba(0,0,0,0.25); padding: 0.8rem; border-radius: 8px; border: 1px solid var(--glass-border);">
+              <p style="color: var(--text-secondary); font-size: 0.85rem; grid-column: 1 / -1; text-align: center; margin: 0.5rem 0;">参加者を設定するとここにメンバーが表示されます</p>
+            </div>
+          </div>
+
+          <div class="summary" style="margin-top: 1.2rem; border-top: 1px solid var(--glass-border); padding-top: 1rem;">
             <p>総席数: <span id="total-seats-display">30</span>席 （参加者: <span class="participant-count-display">0</span>人）</p>
             <p id="seating-warning" class="warning-text"></p>
           </div>
@@ -106,6 +121,25 @@
             <button id="reset-history-btn" class="secondary-btn" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: var(--danger-color); font-size: 0.9rem; padding: 0.5rem 1rem;">履歴をリセット</button>
           </div>
           <p class="hint" style="margin-top: 0.6rem; font-size: 0.85rem;">※結果をブラウザに最大5回分保存し、前後の席の偏りを減らします（前回と同じ席は自動で回避します）。</p>
+        </div>
+
+        <!-- 過去の結果履歴 -->
+        <div class="form-group" style="margin-top: 2.5rem; border-top: 1px solid var(--glass-border); padding-top: 2rem;">
+          <h2>過去の結果履歴</h2>
+          <div class="history-columns">
+            <div>
+              <h3 style="font-size: 1rem; color: #fff; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.4rem;">🎯 くじ引きの履歴 (直近5回)</h3>
+              <div id="normal-history-list" class="history-list-wrapper">
+                <p class="hint" style="text-align: center; padding: 1rem 0;">履歴はありません</p>
+              </div>
+            </div>
+            <div>
+              <h3 style="font-size: 1rem; color: #fff; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.4rem;">🪑 席替えの履歴 (直近5回)</h3>
+              <div id="seating-history-list" class="history-list-wrapper">
+                <p class="hint" style="text-align: center; padding: 1rem 0;">履歴はありません</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <button id="start-btn" class="primary-btn pulse-glow">抽選スタート</button>
@@ -145,7 +179,7 @@
 
         <!-- 席替えモード用結果画面 -->
         <div id="seating-result-container" class="hidden-section">
-          <p class="seating-hint" style="text-align: center; margin-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.95rem; font-weight: 600;">💡 席をドラッグ＆ドロップして、自由に配置を入れ替えられます！</p>
+          <p class="seating-hint" style="text-align: center; margin-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.95rem; font-weight: 600;">💡 席をドラッグ＆ドロップ、または2つの席を順番にタップすることで、自由に配置を入れ替えられます！</p>
           <div class="teacher-desk-wrapper" style="text-align: center; margin-bottom: 2rem;">
             <div class="teacher-desk" style="display: inline-block; padding: 0.6rem 2.5rem; background: rgba(255,255,255,0.08); border: 1px solid var(--glass-border); border-radius: 8px; font-weight: 800; color: var(--text-secondary); font-size: 0.95rem; letter-spacing: 0.2em;">教壇 (前)</div>
           </div>
@@ -156,13 +190,16 @@
           </div>
         </div>
 
-        <div class="result-actions">
-          <button id="retry-btn" class="primary-btn">同じ設定でもう一度</button>
-          <button id="edit-btn" class="secondary-btn">設定を編集</button>
+        <div class="result-actions" style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; width: 100%;">
+          <button id="retry-btn" class="primary-btn" style="width: 100%;">同じ設定でもう一度</button>
+          <div style="display: flex; gap: 1rem; width: 100%;">
+            <button id="edit-btn" class="secondary-btn" style="flex: 1;">設定を編集</button>
+            <button id="home-btn" class="secondary-btn" style="flex: 1; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1);">最初から（ホーム）</button>
+          </div>
         </div>
       </section>
     </main>
   </div>
-  <script src="script.js"></script>
+  <script src="script.js?v=1.1"></script>
 </body>
 </html>
