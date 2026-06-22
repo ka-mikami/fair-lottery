@@ -1,14 +1,14 @@
 :root {
-  --bg-primary: #0f172a;
+  --bg-primary: #0a0e1a;       /* Darker background for maximum text contrast */
   --bg-secondary: #1e293b;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
+  --text-primary: #ffffff;     /* Crisp white primary text */
+  --text-secondary: #cbd5e1;   /* Brighter grey secondary text (previously #94a3b8) */
   --accent-color: #3b82f6;
   --accent-hover: #2563eb;
   --accent-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
-  --glass-bg: rgba(30, 41, 59, 0.6);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --danger-color: #ef4444;
+  --glass-bg: rgba(20, 27, 45, 0.85); /* Slightly darker and more opaque backing to prevent background bleed */
+  --glass-border: rgba(255, 255, 255, 0.16); /* Slightly more prominent border line */
+  --danger-color: #f87171;     /* Brighter coral red for readability */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -31,8 +31,8 @@ body {
 }
 .blob {
   position: absolute;
-  filter: blur(80px);
-  opacity: 0.4;
+  filter: blur(100px);
+  opacity: 0.22; /* Lowered opacity from 0.4 to prevent interference with text */
   border-radius: 50%;
   animation: float 20s infinite ease-in-out alternate;
 }
@@ -56,18 +56,18 @@ body {
 
 header {
   text-align: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.2rem;
 }
 header h1 {
-  font-size: 3rem;
+  font-size: 2.2rem;
   font-weight: 800;
   background: var(--accent-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.3rem;
   letter-spacing: -0.02em;
 }
-header p { color: var(--text-secondary); font-size: 1.1rem; }
+header p { color: var(--text-secondary); font-size: 1rem; }
 
 /* Glassmorphism Panel */
 .glass-panel {
@@ -76,7 +76,7 @@ header p { color: var(--text-secondary); font-size: 1.1rem; }
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
-  padding: 2.5rem;
+  padding: 1.5rem;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
   transition: opacity 0.4s ease, transform 0.4s ease;
 }
@@ -99,10 +99,10 @@ header p { color: var(--text-secondary); font-size: 1.1rem; }
 }
 
 /* フォーム共通 */
-.form-group { margin-bottom: 2.5rem; }
-.form-group h2 { font-size: 1.3rem; margin-bottom: 1.2rem; color: #fff; font-weight: 600; }
+.form-group { margin-bottom: 1.2rem; }
+.form-group h2 { font-size: 1.15rem; margin-bottom: 0.6rem; color: var(--text-primary); font-weight: 600; }
 
-.tabs { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+.tabs { display: flex; gap: 1rem; margin-bottom: 0.8rem; }
 .tab {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--glass-border);
@@ -125,17 +125,20 @@ header p { color: var(--text-secondary); font-size: 1.1rem; }
 
 textarea {
   width: 100%;
-  height: 160px;
-  background: rgba(0,0,0,0.25);
+  height: 120px;
+  background: rgba(0,0,0,0.4);
   border: 1px solid var(--glass-border);
   border-radius: 12px;
-  padding: 1.2rem;
+  padding: 0.8rem 1rem;
   color: #fff;
   font-family: inherit;
   font-size: 1rem;
   resize: vertical;
   line-height: 1.5;
   transition: border-color 0.3s ease;
+}
+textarea::placeholder {
+  color: #8892b0;
 }
 textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
 
@@ -148,7 +151,7 @@ textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0
 }
 .number-input-wrapper button:hover { background: rgba(255,255,255,0.2); }
 .number-input-wrapper input {
-  width: 100px; height: 48px; text-align: center; background: rgba(0,0,0,0.25);
+  width: 100px; height: 48px; text-align: center; background: rgba(0,0,0,0.4);
   border: 1px solid var(--glass-border); border-radius: 12px; font-size: 1.2rem; color: #fff;
   -moz-appearance: textfield;
 }
@@ -157,7 +160,7 @@ textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0
   -webkit-appearance: none; margin: 0;
 }
 .hint { color: var(--text-secondary); font-size: 0.9rem; }
-.summary-text { margin-top: 1rem; font-weight: 600; color: #e2e8f0; }
+.summary-text { margin-top: 1rem; font-weight: 600; color: var(--text-secondary); }
 
 /* 役割設定 */
 #roles-container { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.2rem; }
@@ -329,8 +332,8 @@ textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0
 .seating-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
 
 .seat {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;
   padding: 0.8rem 0.5rem;
   text-align: center;
@@ -348,22 +351,22 @@ textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0
 }
 .seat.occupied {
   border-left: 4px solid var(--accent-color);
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(59, 130, 246, 0.16);
 }
 .seat.occupied.highlight {
   border-left-color: #ec4899;
-  background: rgba(236, 72, 153, 0.1);
+  background: rgba(236, 72, 153, 0.18);
 }
 .seat.empty {
-  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border: 1px dashed rgba(255, 255, 255, 0.35);
   color: var(--text-secondary);
-  opacity: 0.5;
+  opacity: 0.6;
 }
 .seat-number {
   font-size: 0.7rem;
   font-family: monospace;
-  color: var(--text-secondary);
-  background: rgba(0,0,0,0.2);
+  color: #ffffff;
+  background: rgba(0,0,0,0.45);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
   font-weight: 600;
@@ -393,6 +396,7 @@ textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0
 .seat[draggable="true"]:active {
   cursor: grabbing;
 }
+
 .seat.dragging {
   opacity: 0.4;
   border: 2px dashed var(--accent-color);
@@ -416,20 +420,20 @@ textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0
 /* 画面幅が狭いデバイス用の左右はみ出し対策 */
 @media (max-width: 600px) {
   .app-container {
-    padding: 0.8rem;
+    padding: 0.6rem;
   }
   .glass-panel {
-    padding: 1.2rem;
+    padding: 1rem;
     border-radius: 16px;
   }
   header {
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.8rem;
   }
   header h1 {
-    font-size: 2.2rem;
+    font-size: 1.8rem;
   }
   .primary-btn {
-    padding: 1rem;
+    padding: 0.9rem;
     font-size: 1.1rem;
   }
 }
@@ -475,8 +479,8 @@ textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0
   }
   
   textarea {
-    height: 120px;
-    padding: 0.8rem;
+    height: 95px;
+    padding: 0.6rem;
     font-size: 0.9rem;
   }
   
@@ -491,9 +495,14 @@ textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0
   grid-template-columns: 1fr;
   gap: 1.5rem;
 }
-@media (min-width: 768px) {
+@media (min-width: 900px) {
   .history-columns {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 768px) and (max-width: 899px) {
+  .history-columns {
+    grid-template-columns: 1fr 1fr; /* 中間サイズでは2カラムにする */
   }
 }
 .history-list-wrapper {
@@ -552,3 +561,415 @@ textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0
 .history-item-btn:active {
   transform: translateY(0);
 }
+
+/* ==========================================================================
+   テーマ切り替え（ライトモード & トグルボタン）
+   ========================================================================== */
+
+/* テーマ切り替えボタン */
+.theme-toggle-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--glass-border);
+  color: #fff;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+.theme-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  transform: scale(1.1);
+}
+.theme-toggle-btn:active {
+  transform: scale(0.95);
+}
+
+/* ライトモード時の切り替えボタン */
+body.light-theme .theme-toggle-btn {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #0f172a;
+}
+body.light-theme .theme-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* アイコンの表示制御 */
+body.light-theme .theme-icon-dark { display: none; }
+body.light-theme .theme-icon-light { display: block; }
+body:not(.light-theme) .theme-icon-dark { display: block; }
+body:not(.light-theme) .theme-icon-light { display: none; }
+
+/* --------------------------------------------------------------------------
+   ライトモードのカラーテーマ定義と要素オーバーライド
+   -------------------------------------------------------------------------- */
+body.light-theme {
+  --bg-primary: #f1f5f9;       /* Slate 100 */
+  --bg-secondary: #ffffff;
+  --text-primary: #0f172a;     /* Slate 900 */
+  --text-secondary: #475569;   /* Slate 600 */
+  --accent-color: #2563eb;
+  --accent-hover: #1d4ed8;
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(15, 23, 42, 0.12);
+  --danger-color: #dc2626;
+}
+
+/* ライトモードの要素ごとの微調整 */
+body.light-theme .blob {
+  opacity: 0.15; /* ライト時は背景アニメーションをかなり淡くする */
+}
+body.light-theme textarea {
+  background: rgba(0, 0, 0, 0.04);
+  color: #0f172a;
+}
+body.light-theme textarea::placeholder {
+  color: #94a3b8;
+}
+body.light-theme .number-input-wrapper input {
+  background: rgba(0, 0, 0, 0.04);
+  color: #0f172a;
+}
+body.light-theme .role-row {
+  background: rgba(0, 0, 0, 0.02);
+}
+body.light-theme .role-row input {
+  background: rgba(0, 0, 0, 0.04);
+  color: #0f172a;
+}
+body.light-theme .tab {
+  background: rgba(0, 0, 0, 0.03);
+}
+body.light-theme .tab:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+body.light-theme .tab.active {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--accent-color);
+}
+body.light-theme .sort-tab {
+  background: rgba(0, 0, 0, 0.03);
+}
+body.light-theme .sort-tab:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+body.light-theme .sort-tab.active {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--accent-color);
+}
+body.light-theme #priority-members-list {
+  background: rgba(0, 0, 0, 0.04);
+}
+body.light-theme #priority-members-list label {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.05);
+  color: #0f172a;
+}
+body.light-theme .history-list-wrapper {
+  background: rgba(0, 0, 0, 0.04);
+}
+body.light-theme .history-item-row {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(15, 23, 42, 0.06);
+}
+body.light-theme .history-item-row:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+body.light-theme .history-item-time {
+  color: #0f172a;
+}
+
+/* 座席の調整 (ライトモード) */
+body.light-theme .seat {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+body.light-theme .seat.occupied {
+  background: rgba(59, 130, 246, 0.1);
+}
+body.light-theme .seat.occupied.highlight {
+  background: rgba(236, 72, 153, 0.1);
+}
+body.light-theme .seat.empty {
+  border: 1px dashed rgba(15, 23, 42, 0.2);
+  background: transparent;
+  box-shadow: none;
+}
+body.light-theme .seat-number {
+  color: #334155;
+  background: rgba(0, 0, 0, 0.06);
+}
+body.light-theme .teacher-desk {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* ライトモード時のセカンダリボタンの可読性向上 */
+body.light-theme .secondary-btn {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #334155;
+}
+body.light-theme .secondary-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.18);
+  color: #0f172a;
+}
+
+/* ライトモード時の履歴「結果を見る」ボタンの可読性向上 */
+body.light-theme .history-item-btn {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: rgba(37, 99, 235, 0.25);
+  color: #1d4ed8;
+}
+body.light-theme .history-item-btn:hover {
+  background: rgba(37, 99, 235, 0.2);
+  border-color: rgba(37, 99, 235, 0.4);
+  color: #1e40af;
+}
+
+/* ライトモード時の役割バッジ（通常） */
+body.light-theme .result-role {
+  background: rgba(0, 0, 0, 0.05);
+  color: #475569;
+}
+
+/* ライトモード時の抽選結果項目 */
+body.light-theme .result-item {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: var(--accent-color);
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+body.light-theme .result-item.highlight {
+  background: rgba(236, 72, 153, 0.08);
+}
+
+/* ライトモード時の人数増減ボタンの可読性向上 */
+body.light-theme .number-input-wrapper button {
+  color: #0f172a;
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+body.light-theme .number-input-wrapper button:hover {
+  background: rgba(0, 0, 0, 0.1);
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+/* 追加の履歴読み込みセレクトボックス */
+.history-select {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  color: #fff;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  max-width: 220px;
+  outline: none;
+  cursor: pointer;
+  display: none;
+}
+body.light-theme .history-select {
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--text-primary);
+}
+
+/* 席替え設定のインプット */
+.seating-input-group input[type="number"] {
+  width: 70px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--glass-border);
+  padding: 0.5rem;
+  border-radius: 8px;
+  color: #fff;
+  text-align: center;
+}
+body.light-theme .seating-input-group input[type="number"] {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-primary);
+}
+
+/* ホームボタン（ダーク/ライト調整） */
+#home-btn {
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.1);
+}
+body.light-theme #home-btn {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #334155;
+}
+body.light-theme #home-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.18);
+  color: #0f172a;
+}
+
+/* 優先配置メンバーラベルのスタイリング (JavaScriptと連携) */
+.priority-member-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transition: all 0.2s ease;
+}
+.priority-member-label:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.priority-member-label.checked {
+  background: rgba(236, 72, 153, 0.15) !important;
+  border-color: #ec4899 !important;
+}
+body.light-theme .priority-member-label {
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.05);
+}
+body.light-theme .priority-member-label.checked {
+  background: rgba(236, 72, 153, 0.1) !important;
+  border-color: #ec4899 !important;
+}
+
+/* ==========================================================================
+   ルーレット機能用スタイル
+   ========================================================================== */
+.roulette-wheel-wrapper {
+  perspective: 1000px;
+}
+
+/* ポインター（矢印）のライトテーマ時の色調整 */
+body.light-theme .roulette-pointer {
+  border-top-color: var(--accent-color) !important;
+}
+
+/* ルーレット盤のライトテーマ時背景 */
+body.light-theme #roulette-canvas {
+  background: #ffffff !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* 当選者パネルの出現アニメーション */
+@keyframes popWinner {
+  0% {
+    opacity: 0;
+    transform: scale(0.7) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.winner-panel {
+  display: block;
+}
+
+/* コピペ用インプットのライトテーマ調整 */
+body.light-theme #roulette-winner-input {
+  color: #0f172a !important;
+}
+
+/* コピー完了時の一時的スタイル用 */
+.copy-success {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: #10b981 !important;
+  color: #10b981 !important;
+}
+body.light-theme .copy-success {
+  background: rgba(16, 185, 129, 0.1) !important;
+  border-color: #10b981 !important;
+  color: #047857 !important;
+}
+
+/* コピー完了ツールチップ用 */
+.copy-tooltip {
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #10b981;
+  color: #fff;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 10;
+  white-space: nowrap;
+}
+.copy-tooltip.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-5px);
+}
+
+/* ==========================================================================
+   履歴アコーディオン（details / summary）用スタイル
+   ========================================================================== */
+.history-details {
+  border-top: 1px solid var(--glass-border);
+  padding-top: 1.2rem;
+  margin-top: 1.5rem;
+}
+.history-details summary {
+  cursor: pointer;
+  outline: none;
+  list-style: none; /* デフォルトの矢印を消す */
+  user-select: none;
+}
+.history-details summary::-webkit-details-marker {
+  display: none; /* Safari用の矢印消し */
+}
+.history-details summary h2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0 !important; /* 閉じている時は下マージンなし */
+  font-size: 1.15rem;
+  color: var(--text-primary);
+}
+.history-details .accordion-icon {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-block;
+}
+.history-details[open] summary h2 {
+  margin-bottom: 1rem !important; /* 開いている時は下マージンあり */
+}
+.history-details[open] .accordion-icon {
+  transform: rotate(180deg);
+}
+.history-details .history-columns {
+  animation: slideDownHistory 0.3s ease-out forwards;
+  opacity: 0;
+  transform: translateY(-10px);
+}
+@keyframes slideDownHistory {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

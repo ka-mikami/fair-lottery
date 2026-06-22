@@ -45,17 +45,27 @@ const els = {
   resultTitle: document.getElementById('result-title'),
   normalResultContainer: document.getElementById('normal-result-container'),
   seatingResultContainer: document.getElementById('seating-result-container'),
+  rouletteResultContainer: document.getElementById('roulette-result-container'),
   resultList: document.getElementById('result-list'),
   seatingGrid: document.getElementById('seating-grid'),
   sortTabs: document.querySelectorAll('.sort-tab'),
   retryBtn: document.getElementById('retry-btn'),
   editBtn: document.getElementById('edit-btn'),
-  homeBtn: document.getElementById('home-btn')
+  homeBtn: document.getElementById('home-btn'),
+  themeToggleBtn: document.getElementById('theme-toggle-btn'),
+
+  // Roulette UI elements
+  rouletteRemoveToggle: document.getElementById('roulette-remove-toggle'),
+  rouletteHistoryList: document.getElementById('roulette-history-list'),
+  rouletteCanvas: document.getElementById('roulette-canvas'),
+  rouletteWinnerPanel: document.getElementById('roulette-winner-panel'),
+  rouletteWinnerInput: document.getElementById('roulette-winner-input'),
+  rouletteCopyBtn: document.getElementById('roulette-copy-btn')
 };
 
 // State
 let state = {
-  mode: 'normal', // 'normal' or 'seating'
+  mode: 'normal', // 'normal', 'seating', or 'roulette'
   inputType: 'names-input', // 'names-input' or 'number-input'
   roles: [
     { id: 1, name: '当たり', count: 1 },
@@ -68,9 +78,19 @@ let state = {
   history: [], // Seating history: max 5 items
   participantsHistory: [], // Participants text history: max 5 items
   normalHistory: [], // Normal lottery history: max 5 items
+  rouletteHistory: [], // Roulette lottery history: max 5 items
+  rouletteRemoveSelected: false, // Auto exclude toggle
+  rouletteWinner: '', // Winner name
+  theme: 'dark', // 'dark' or 'light'
   useWeighting: false,
   selectedSeatIndex: null // for mobile tap-to-swap
 };
+
+// Roulette Color Palette
+const rouletteColors = [
+  '#2563eb', '#3b82f6', '#10b981', '#059669', '#f59e0b', '#d97706',
+  '#dc2626', '#b91c1c', '#7c3aed', '#6d28d9', '#ec4899', '#db2777'
+];
 
 // Initialize
 function init() {
@@ -104,6 +124,43 @@ function init() {
     state.normalHistory = [];
   }
 
+  // Load roulette history
+  try {
+    const savedRouletteHistory = localStorage.getItem('rouletteHistory');
+    if (savedRouletteHistory) {
+      state.rouletteHistory = JSON.parse(savedRouletteHistory);
+    }
+  } catch (e) {
+    state.rouletteHistory = [];
+  }
+
+  // Load roulette remove option
+  try {
+    const savedRouletteRemove = localStorage.getItem('rouletteRemoveSelected');
+    if (savedRouletteRemove !== null) {
+      state.rouletteRemoveSelected = savedRouletteRemove === 'true';
+      if (els.rouletteRemoveToggle) {
+        els.rouletteRemoveToggle.checked = state.rouletteRemoveSelected;
+      }
+    }
+  } catch (e) {
+    state.rouletteRemoveSelected = false;
+  }
+
+  // Load theme from localStorage
+  try {
+    const savedTheme = localStorage.getItem('lotteryTheme');
+    if (savedTheme === 'light') {
+      state.theme = 'light';
+      document.body.classList.add('light-theme');
+    } else {
+      state.theme = 'dark';
+      document.body.classList.remove('light-theme');
+    }
+  } catch (e) {
+    state.theme = 'dark';
+  }
+
   // Load toggle state from localStorage
   try {
     const savedWeighting = localStorage.getItem('seatingUseWeighting');
@@ -120,7 +177,7 @@ function init() {
   // Load saved mode from localStorage
   try {
     const savedMode = localStorage.getItem('lotteryMode');
-    if (savedMode === 'normal' || savedMode === 'seating') {
+    if (savedMode === 'normal' || savedMode === 'seating' || savedMode === 'roulette') {
       state.mode = savedMode;
     }
   } catch (e) {}
@@ -185,7 +242,7 @@ function bindEvents() {
   els.participantsNumber.addEventListener('input', updateParticipantCount);
   
   els.numDecrease.addEventListener('click', () => {
-    els.participantsNumber.value = Math.max(2, parseInt(els.participantsNumber.value) - 1);
+    els.participantsNumber.value = Math.max(0, parseInt(els.participantsNumber.value) - 1);
     updateParticipantCount();
   });
   els.numIncrease.addEventListener('click', () => {
@@ -203,10 +260,21 @@ function bindEvents() {
   // Actions
   els.startBtn.addEventListener('click', startLottery);
   els.retryBtn.addEventListener('click', () => {
+    const participants = getParticipants();
+    if (participants.length === 0) {
+      alert('参加者が設定されていないか、すべて除外されました。設定画面に戻ります。');
+      els.resultSection.classList.replace('active-section', 'hidden-section');
+      els.setupSection.classList.replace('hidden-section', 'active-section');
+      return;
+    }
     els.resultSection.classList.replace('active-section', 'hidden-section');
     startLottery();
   });
   els.editBtn.addEventListener('click', () => {
+    if (window.rouletteAnimFrameId) {
+      cancelAnimationFrame(window.rouletteAnimFrameId);
+      window.rouletteAnimFrameId = null;
+    }
     els.resultSection.classList.replace('active-section', 'hidden-section');
     els.setupSection.classList.replace('hidden-section', 'active-section');
   });
@@ -284,12 +352,14 @@ function bindEvents() {
 
   if (els.resetHistoryBtn) {
     els.resetHistoryBtn.addEventListener('click', () => {
-      if (confirm('過去のすべての結果履歴（くじ引き・席替え）を削除してもよろしいですか？（偏り防止の基準もリセットされます）')) {
+      if (confirm('過去のすべての結果履歴（くじ引き・席替え・ルーレット）を削除してもよろしいですか？（偏り防止の基準もリセットされます）')) {
         state.history = [];
         state.normalHistory = [];
+        state.rouletteHistory = [];
         try {
           localStorage.removeItem('seatingHistory');
           localStorage.removeItem('normalLotteryHistory');
+          localStorage.removeItem('rouletteHistory');
         } catch (err) {}
         updateResultsHistoryList();
         alert('履歴をリセットしました。');
@@ -435,6 +505,61 @@ function bindEvents() {
       }
     });
   }
+
+  // Theme Toggle Button Event
+  if (els.themeToggleBtn) {
+    els.themeToggleBtn.addEventListener('click', () => {
+      document.body.classList.toggle('light-theme');
+      const isLight = document.body.classList.contains('light-theme');
+      state.theme = isLight ? 'light' : 'dark';
+      try {
+        localStorage.setItem('lotteryTheme', state.theme);
+      } catch (err) {}
+    });
+  }
+
+  // Roulette Toggle Event
+  if (els.rouletteRemoveToggle) {
+    els.rouletteRemoveToggle.addEventListener('change', e => {
+      state.rouletteRemoveSelected = e.target.checked;
+      try {
+        localStorage.setItem('rouletteRemoveSelected', state.rouletteRemoveSelected);
+      } catch (err) {}
+    });
+  }
+
+  // Roulette Copy Button Event
+  if (els.rouletteCopyBtn) {
+    els.rouletteCopyBtn.addEventListener('click', () => {
+      const winnerName = els.rouletteWinnerInput.value;
+      if (!winnerName) return;
+
+      navigator.clipboard.writeText(winnerName).then(() => {
+        // Show tooltip
+        let tooltip = els.rouletteCopyBtn.querySelector('.copy-tooltip');
+        if (!tooltip) {
+          tooltip = document.createElement('span');
+          tooltip.className = 'copy-tooltip';
+          tooltip.textContent = 'コピーしました！';
+          els.rouletteCopyBtn.appendChild(tooltip);
+        }
+        
+        els.rouletteCopyBtn.classList.add('copy-success');
+        const btnText = els.rouletteCopyBtn.querySelector('.copy-btn-text');
+        const origText = btnText ? btnText.textContent : '名前をコピーする';
+        if (btnText) btnText.textContent = 'コピー完了！';
+
+        tooltip.classList.add('show');
+        setTimeout(() => {
+          tooltip.classList.remove('show');
+          els.rouletteCopyBtn.classList.remove('copy-success');
+          if (btnText) btnText.textContent = origText;
+        }, 1500);
+      }).catch(err => {
+        alert('コピーに失敗しました。直接テキストを選択してコピーしてください。');
+      });
+    });
+  }
 }
 
 function getParticipants() {
@@ -470,7 +595,7 @@ function renderPriorityMembers() {
   
   participants.forEach(name => {
     const label = document.createElement('label');
-    label.style.cssText = 'display: flex; align-items: center; gap: 0.4rem; color: #fff; font-size: 0.85rem; cursor: pointer; background: rgba(255,255,255,0.03); padding: 0.3rem 0.5rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;';
+    label.className = 'priority-member-label';
     label.title = name;
     
     const checkbox = document.createElement('input');
@@ -479,18 +604,13 @@ function renderPriorityMembers() {
     checkbox.value = name;
     if (checkedMembers.has(name)) {
       checkbox.checked = true;
+      label.classList.add('checked');
     }
     
     // UI improvement: Change style on check
     checkbox.addEventListener('change', () => {
-      label.style.background = checkbox.checked ? 'rgba(236,72,153,0.15)' : 'rgba(255,255,255,0.03)';
-      label.style.borderColor = checkbox.checked ? '#ec4899' : 'rgba(255,255,255,0.05)';
+      label.classList.toggle('checked', checkbox.checked);
     });
-    
-    if (checkbox.checked) {
-      label.style.background = 'rgba(236,72,153,0.15)';
-      label.style.borderColor = '#ec4899';
-    }
     
     const span = document.createElement('span');
     span.textContent = getDisplayName(name);
@@ -580,7 +700,7 @@ function updateValidation() {
       els.startBtn.disabled = false;
       els.startBtn.style.opacity = '1';
     }
-  } else {
+  } else if (state.mode === 'seating') {
     // Seating mode validation
     const rows = parseInt(els.seatingRows.value) || 0;
     const cols = parseInt(els.seatingCols.value) || 0;
@@ -598,6 +718,15 @@ function updateValidation() {
     } else {
       const emptyCount = seats - pCount;
       els.seatingWarning.textContent = emptyCount > 0 ? `空席が ${emptyCount} 席できます。` : '';
+      els.startBtn.disabled = false;
+      els.startBtn.style.opacity = '1';
+    }
+  } else {
+    // Roulette mode validation
+    if (pCount === 0) {
+      els.startBtn.disabled = true;
+      els.startBtn.style.opacity = '0.5';
+    } else {
       els.startBtn.disabled = false;
       els.startBtn.style.opacity = '1';
     }
@@ -692,7 +821,12 @@ function startLottery() {
   saveParticipantsTextToHistory();
   
   const participants = getParticipants();
-  if (participants.length === 0) return;
+  if (participants.length === 0) {
+    // 画面が真っ白になるのを防ぐため、設定画面に戻す
+    els.resultSection.classList.replace('active-section', 'hidden-section');
+    els.setupSection.classList.replace('hidden-section', 'active-section');
+    return;
+  }
 
   if (state.mode === 'normal') {
     // Build roles array
@@ -725,7 +859,7 @@ function startLottery() {
 
     // Save normal lottery result to history
     saveNormalLotteryToHistory();
-  } else {
+  } else if (state.mode === 'seating') {
     // Seating mode lottery
     const rows = parseInt(els.seatingRows.value) || 0;
     const cols = parseInt(els.seatingCols.value) || 0;
@@ -839,30 +973,50 @@ function startLottery() {
     
     // Save this seating result to history
     saveSeatingResultToHistory(rows, cols);
+  } else {
+    // Roulette mode lottery
+    const shuffled = secureShuffle(participants);
+    state.rouletteWinner = shuffled[0];
+    saveRouletteToHistory();
   }
 
   // UI transition
   els.setupSection.classList.replace('active-section', 'hidden-section');
-  els.animationSection.classList.replace('hidden-section', 'active-section');
 
-  // Reset sort tabs
-  state.currentSort = 'random';
-  els.sortTabs.forEach(tab => {
-    if (tab.dataset.sort === 'random') {
-      tab.classList.add('active');
-    } else {
-      tab.classList.remove('active');
-    }
-  });
-
-  // After animation, show result
-  setTimeout(() => {
-    els.animationSection.classList.replace('active-section', 'hidden-section');
+  if (state.mode === 'roulette') {
+    els.resultSection.classList.replace('hidden-section', 'active-section');
     showResult();
-  }, 2500); // 2.5 seconds shuffling
+  } else {
+    els.animationSection.classList.replace('hidden-section', 'active-section');
+
+    // Reset sort tabs
+    state.currentSort = 'random';
+    els.sortTabs.forEach(tab => {
+      if (tab.dataset.sort === 'random') {
+        tab.classList.add('active');
+      } else {
+        tab.classList.remove('active');
+      }
+    });
+
+    // After animation, show result
+    setTimeout(() => {
+      els.animationSection.classList.replace('active-section', 'hidden-section');
+      showResult();
+    }, 2500); // 2.5 seconds shuffling
+  }
 }
 
 function showResult() {
+  // Enable buttons by default (will be disabled during roulette spin)
+  [els.retryBtn, els.editBtn, els.homeBtn].forEach(btn => {
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+    }
+  });
+
   if (state.mode === 'normal') {
     els.resultTitle.textContent = '抽選結果';
     els.normalResultContainer.classList.remove('hidden-section');
@@ -908,11 +1062,12 @@ function showResult() {
       `;
       els.resultList.appendChild(li);
     });
-  } else {
+  } else if (state.mode === 'seating') {
     // Seating result rendering
     els.resultTitle.textContent = '座席配置';
     els.normalResultContainer.classList.add('hidden-section');
     els.seatingResultContainer.classList.remove('hidden-section');
+    els.rouletteResultContainer.classList.add('hidden-section');
     
     els.seatingGrid.innerHTML = '';
     
@@ -961,6 +1116,22 @@ function showResult() {
 
       els.seatingGrid.appendChild(seatDiv);
     });
+  } else {
+    // Roulette result rendering
+    const pCount = getParticipants().length;
+    els.resultTitle.textContent = pCount === 1 ? 'ルーレット（最後の1人）' : 'ルーレット';
+    els.normalResultContainer.classList.add('hidden-section');
+    els.seatingResultContainer.classList.add('hidden-section');
+    els.rouletteResultContainer.classList.remove('hidden-section');
+
+    if (window.rouletteAnimFrameId) {
+      cancelAnimationFrame(window.rouletteAnimFrameId);
+    }
+
+    els.rouletteWinnerPanel.classList.add('hidden-section');
+    els.rouletteWinnerInput.value = '';
+
+    runRouletteAnimation();
   }
 
   els.resultSection.classList.replace('hidden-section', 'active-section');
@@ -1187,6 +1358,12 @@ function resetToHome() {
     return;
   }
 
+  // Cancel any active roulette animation
+  if (window.rouletteAnimFrameId) {
+    cancelAnimationFrame(window.rouletteAnimFrameId);
+    window.rouletteAnimFrameId = null;
+  }
+
   // 1. Clear participant inputs
   els.participantsText.value = '';
   els.participantsNumber.value = 5;
@@ -1226,6 +1403,15 @@ function resetToHome() {
     els.priorityMembersList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
   }
 
+  // 5.5. Reset roulette remove option
+  state.rouletteRemoveSelected = false;
+  if (els.rouletteRemoveToggle) {
+    els.rouletteRemoveToggle.checked = false;
+    try {
+      localStorage.setItem('rouletteRemoveSelected', 'false');
+    } catch (e) {}
+  }
+
   // 6. Update counts and warnings
   updateParticipantCount();
   updateResultsHistoryList();
@@ -1233,6 +1419,8 @@ function resetToHome() {
   // 7. Reset results and sorting states
   state.finalResult = [];
   state.finalSeatingResult = [];
+  state.rouletteWinner = '';
+  els.rouletteWinnerInput.value = '';
   state.currentSort = 'random';
   state.selectedSeatIndex = null;
   
@@ -1327,6 +1515,34 @@ function updateResultsHistoryList() {
       });
     }
   }
+
+  // Update roulette history
+  if (els.rouletteHistoryList) {
+    els.rouletteHistoryList.innerHTML = '';
+    if (!state.rouletteHistory || state.rouletteHistory.length === 0) {
+      els.rouletteHistoryList.innerHTML = '<p class="hint" style="text-align: center; padding: 1rem 0;">履歴はありません</p>';
+    } else {
+      // Show newest first
+      [...state.rouletteHistory].reverse().forEach((h, revIndex) => {
+        const index = state.rouletteHistory.length - 1 - revIndex;
+
+        const row = document.createElement('div');
+        row.className = 'history-item-row';
+
+        const date = new Date(h.timestamp);
+        const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+
+        row.innerHTML = `
+          <div class="history-item-info">
+            <span class="history-item-time">${dateStr}</span>
+            <span>当選: ${getDisplayName(h.winner)} (総数:${h.participantsCount}人)</span>
+          </div>
+          <button class="history-item-btn" onclick="loadRouletteHistory(${index})">結果を見る</button>
+        `;
+        els.rouletteHistoryList.appendChild(row);
+      });
+    }
+  }
 }
 
 function loadNormalHistoryItem(index) {
@@ -1397,6 +1613,273 @@ function loadSeatingHistoryItem(index) {
 // Bind load functions to global window object
 window.loadNormalHistory = loadNormalHistoryItem;
 window.loadSeatingHistory = loadSeatingHistoryItem;
+window.loadRouletteHistory = loadRouletteHistoryItem;
+
+function saveRouletteToHistory() {
+  const newEvent = {
+    timestamp: Date.now(),
+    winner: state.rouletteWinner,
+    participantsCount: getParticipants().length,
+    removed: state.rouletteRemoveSelected
+  };
+
+  if (!state.rouletteHistory) {
+    state.rouletteHistory = [];
+  }
+
+  state.rouletteHistory.push(newEvent);
+
+  while (state.rouletteHistory.length > 5) {
+    state.rouletteHistory.shift();
+  }
+
+  try {
+    localStorage.setItem('rouletteHistory', JSON.stringify(state.rouletteHistory));
+  } catch (e) {}
+
+  updateResultsHistoryList();
+}
+
+function runRouletteAnimation() {
+  const canvas = els.rouletteCanvas;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const participants = getParticipants();
+  const count = participants.length;
+  
+  if (count === 0) return;
+
+  // Disable action buttons during spin to prevent double-triggering or state corruption
+  [els.retryBtn, els.editBtn, els.homeBtn].forEach(btn => {
+    if (btn) {
+      btn.disabled = true;
+      btn.style.opacity = '0.5';
+      btn.style.pointerEvents = 'none';
+    }
+  });
+
+  const winner = state.rouletteWinner;
+  let winnerIdx = participants.indexOf(winner);
+  if (winnerIdx === -1) winnerIdx = 0;
+
+  const arcSize = (Math.PI * 2) / count;
+  
+  let startTime = null;
+  // 参加者が1人の場合はルーレットを回す意味がないため、アニメーション時間を0にして即座に結果を表示する
+  const duration = count === 1 ? 0 : 4000;
+  
+  // 針は真上（-Math.PI / 2）を指す
+  const baseStopRotation = -Math.PI / 2 - (winnerIdx * arcSize + arcSize / 2);
+  const targetRotation = baseStopRotation - (Math.PI * 2 * 6); // 逆方向に6回転
+
+  const startRotation = 0;
+
+  function drawWheel(currentRotation) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const radius = cx - 15;
+
+    for (let i = 0; i < count; i++) {
+      const angle = currentRotation + i * arcSize;
+      
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, angle, angle + arcSize);
+      ctx.closePath();
+      
+      ctx.fillStyle = rouletteColors[i % rouletteColors.length];
+      ctx.fill();
+      
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Draw Name Text
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(angle + arcSize / 2);
+      
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff';
+      
+      let fontSize = 24;
+      if (count > 25) fontSize = 12;
+      else if (count > 15) fontSize = 16;
+      else if (count > 10) fontSize = 20;
+      
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      
+      const displayName = getDisplayName(participants[i]);
+      const textToDraw = displayName.length > 10 ? displayName.slice(0, 9) + '..' : displayName;
+      ctx.fillText(textToDraw, radius - 20, 0);
+      ctx.restore();
+    }
+
+    // Center Pin
+    ctx.beginPath();
+    ctx.arc(cx, cy, 25, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 5;
+    ctx.stroke();
+  }
+
+  function animate(timestamp) {
+    if (!startTime) startTime = timestamp;
+    const elapsed = timestamp - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    
+    // Ease Out Cubic
+    const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+    const currentRotation = startRotation + (targetRotation - startRotation) * easeOutCubic;
+    
+    drawWheel(currentRotation);
+    
+    if (progress < 1) {
+      window.rouletteAnimFrameId = requestAnimationFrame(animate);
+    } else {
+      cancelAnimationFrame(window.rouletteAnimFrameId);
+      window.rouletteAnimFrameId = null;
+      
+      // Update Winner UI
+      els.rouletteWinnerInput.value = getDisplayName(winner);
+      els.rouletteWinnerPanel.classList.remove('hidden-section');
+      
+      // Re-enable action buttons after spin completes
+      [els.retryBtn, els.editBtn, els.homeBtn].forEach(btn => {
+        if (btn) {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.style.pointerEvents = 'auto';
+        }
+      });
+      
+      // Trigger Exclude
+      if (state.rouletteRemoveSelected) {
+        removeWinnerFromParticipants(winner);
+      }
+    }
+  }
+
+  window.rouletteAnimFrameId = requestAnimationFrame(animate);
+}
+
+function removeWinnerFromParticipants(winnerName) {
+  if (state.inputType === 'names-input') {
+    const text = els.participantsText.value;
+    const lines = text.split('\n');
+    
+    const index = lines.findIndex(line => {
+      return line.trim() === winnerName.trim() || getDisplayName(line) === getDisplayName(winnerName);
+    });
+    
+    if (index !== -1) {
+      lines.splice(index, 1);
+      els.participantsText.value = lines.join('\n');
+      updateParticipantCount();
+    }
+  } else {
+    els.participantsNumber.value = Math.max(0, parseInt(els.participantsNumber.value) - 1);
+    updateParticipantCount();
+  }
+}
+
+function loadRouletteHistoryItem(index) {
+  if (!state.rouletteHistory || !state.rouletteHistory[index]) return;
+  const item = state.rouletteHistory[index];
+
+  state.rouletteWinner = item.winner;
+  state.mode = 'roulette';
+
+  if (els.modeTabs) {
+    const btn = els.modeTabs.querySelector('button[data-mode="roulette"]');
+    if (btn) {
+      els.modeTabs.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+  }
+
+  els.setupSection.classList.replace('active-section', 'hidden-section');
+  els.resultSection.classList.replace('hidden-section', 'active-section');
+  
+  els.resultTitle.textContent = 'ルーレット';
+  els.normalResultContainer.classList.add('hidden-section');
+  els.seatingResultContainer.classList.add('hidden-section');
+  els.rouletteResultContainer.classList.remove('hidden-section');
+
+  els.rouletteWinnerInput.value = getDisplayName(item.winner);
+  els.rouletteWinnerPanel.classList.remove('hidden-section');
+  
+  drawStaticWheel(item.winner, item.participantsCount);
+
+  const date = new Date(item.timestamp);
+  const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  els.resultTitle.innerHTML = `ルーレット結果 <span style="font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); margin-left: 0.5rem; background: rgba(255,255,255,0.08); padding: 0.2rem 0.5rem; border-radius: 6px;">${dateStr} の履歴</span>`;
+}
+
+function drawStaticWheel(winner, totalCount) {
+  const canvas = els.rouletteCanvas;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const count = totalCount || 10;
+  
+  const arcSize = (Math.PI * 2) / count;
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const radius = cx - 15;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const currentRotation = -Math.PI / 2 - arcSize / 2;
+
+  for (let i = 0; i < count; i++) {
+    const angle = currentRotation + i * arcSize;
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, radius, angle, angle + arcSize);
+    ctx.closePath();
+
+    ctx.fillStyle = rouletteColors[i % rouletteColors.length];
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle + arcSize / 2);
+
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    
+    let fontSize = 24;
+    if (count > 25) fontSize = 12;
+    else if (count > 15) fontSize = 16;
+    else if (count > 10) fontSize = 20;
+    
+    ctx.font = `bold ${fontSize}px sans-serif`;
+
+    const nameToDraw = i === 0 ? getDisplayName(winner) : `参加者 ${i + 1}`;
+    const textToDraw = nameToDraw.length > 10 ? nameToDraw.slice(0, 9) + '..' : nameToDraw;
+    ctx.fillText(textToDraw, radius - 20, 0);
+    ctx.restore();
+  }
+
+  // Center Pin
+  ctx.beginPath();
+  ctx.arc(cx, cy, 25, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 5;
+  ctx.stroke();
+}
 
 // Start
 init();

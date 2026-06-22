@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fair Lottery - 公平なくじ</title>
   <meta name="description" content="人数や役割を自由に設定できる、明確に公平なくじアプリです。">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2.1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+JP:wght@400;600;800&display=swap" rel="stylesheet">
@@ -18,7 +18,11 @@
   </div>
 
   <div class="app-container">
-    <header>
+    <header style="position: relative;">
+      <button id="theme-toggle-btn" class="theme-toggle-btn" aria-label="テーマ切り替え" title="テーマ切り替え">
+        <span class="theme-icon-dark">🌙</span>
+        <span class="theme-icon-light">☀️</span>
+      </button>
       <h1>Fair Lottery</h1>
       <p>明確に公平な、役割決め・くじ引きアプリ</p>
     </header>
@@ -32,6 +36,7 @@
           <div class="tabs" id="mode-tabs">
             <button class="tab active" data-mode="normal">くじ引き・役割決め</button>
             <button class="tab" data-mode="seating">席替え</button>
+            <button class="tab" data-mode="roulette">ルーレット</button>
           </div>
         </div>
 
@@ -46,7 +51,7 @@
           <div id="names-input" class="tab-content active">
             <div class="history-select-wrapper" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
               <span class="hint" style="font-size: 0.8rem; margin: 0;">※改行区切りで入力</span>
-              <select id="participants-history-select" style="background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 6px; color: #fff; padding: 0.3rem 0.6rem; font-size: 0.85rem; max-width: 220px; outline: none; cursor: pointer; display: none;">
+              <select id="participants-history-select" class="history-select">
                 <option value="">-- 履歴から読み込む --</option>
               </select>
             </div>
@@ -55,7 +60,7 @@
           <div id="number-input" class="tab-content hidden">
             <div class="number-input-wrapper">
               <button id="num-decrease">-</button>
-              <input type="number" id="participants-number" min="2" max="100" value="5">
+              <input type="number" id="participants-number" min="0" max="100" value="5">
               <button id="num-increase">+</button>
             </div>
             <p class="hint">「参加者1」「参加者2」...と自動で割り当てられます</p>
@@ -86,18 +91,18 @@
           <div class="seating-input-group" style="display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
               <label for="seating-rows">行（縦）:</label>
-              <input type="number" id="seating-rows" min="1" max="15" value="5" style="width: 70px; background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); padding: 0.5rem; border-radius: 8px; color: #fff; text-align: center;">
+              <input type="number" id="seating-rows" min="1" max="15" value="5">
             </div>
             <div style="font-size: 1.5rem; font-weight: bold; color: var(--text-secondary);">×</div>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
               <label for="seating-cols">列（横）:</label>
-              <input type="number" id="seating-cols" min="1" max="15" value="6" style="width: 70px; background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); padding: 0.5rem; border-radius: 8px; color: #fff; text-align: center;">
+              <input type="number" id="seating-cols" min="1" max="15" value="6">
             </div>
             <button id="auto-seating-btn" class="secondary-btn" style="margin-left: auto;">人数に自動で合わせる</button>
           </div>
           
           <div class="priority-seating-group" style="margin-top: 1.5rem; border-top: 1px dashed var(--glass-border); padding-top: 1.2rem;">
-            <h3 style="font-size: 1.1rem; color: #fff; margin-bottom: 0.3rem;">前列優先配置メンバー（目の悪い方など）</h3>
+            <h3 style="font-size: 1.1rem; color: var(--text-primary); margin-bottom: 0.3rem;">前列優先配置メンバー（目の悪い方など）</h3>
             <p class="hint" style="margin-bottom: 0.8rem; font-size: 0.8rem;">※チェックしたメンバーは、自動的に「前2列（または最前列）」のいずれかに優先配置されます。</p>
             <div id="priority-members-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.5rem; max-height: 130px; overflow-y: auto; background: rgba(0,0,0,0.25); padding: 0.8rem; border-radius: 8px; border: 1px solid var(--glass-border);">
               <p style="color: var(--text-secondary); font-size: 0.85rem; grid-column: 1 / -1; text-align: center; margin: 0.5rem 0;">参加者を設定するとここにメンバーが表示されます</p>
@@ -110,13 +115,24 @@
           </div>
         </div>
 
+        <!-- 2c. ルーレット設定（ルーレットモード用） -->
+        <div class="form-group mode-content hidden-section" id="roulette-mode-content">
+          <h2>2. ルーレット設定</h2>
+          <div style="display: flex; flex-direction: column; gap: 0.8rem;">
+            <label class="toggle-switch-wrapper" style="display: flex; align-items: center; gap: 0.8rem; cursor: pointer; user-select: none;">
+              <input type="checkbox" id="roulette-remove-toggle" style="width: 20px; height: 20px; cursor: pointer;">
+              <span style="font-weight: 600; color: var(--text-primary);">当選した名前を参加者リストから自動で除外する</span>
+            </label>
+          </div>
+        </div>
+
         <!-- オプション設定 -->
         <div class="form-group" style="margin-top: 2rem; border-top: 1px solid var(--glass-border); padding-top: 1.5rem;">
           <h2>オプション設定</h2>
           <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
             <label class="toggle-switch-wrapper" style="display: flex; align-items: center; gap: 0.8rem; cursor: pointer; user-select: none;">
               <input type="checkbox" id="weight-toggle" style="width: 20px; height: 20px; cursor: pointer;">
-              <span style="font-weight: 600; color: #fff;">偏りを減らす重み付け（過去の履歴を考慮）</span>
+              <span style="font-weight: 600; color: var(--text-primary);">偏りを減らす重み付け（過去の履歴を考慮）</span>
             </label>
             <button id="reset-history-btn" class="secondary-btn" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: var(--danger-color); font-size: 0.9rem; padding: 0.5rem 1rem;">履歴をリセット</button>
           </div>
@@ -124,23 +140,34 @@
         </div>
 
         <!-- 過去の結果履歴 -->
-        <div class="form-group" style="margin-top: 2.5rem; border-top: 1px solid var(--glass-border); padding-top: 2rem;">
-          <h2>過去の結果履歴</h2>
+        <details class="history-details form-group">
+          <summary>
+            <h2>
+              <span>過去の結果履歴 (クリックで開閉)</span>
+              <span class="accordion-icon">▼</span>
+            </h2>
+          </summary>
           <div class="history-columns">
             <div>
-              <h3 style="font-size: 1rem; color: #fff; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.4rem;">🎯 くじ引きの履歴 (直近5回)</h3>
+              <h3 style="font-size: 1rem; color: var(--text-primary); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.4rem;">🎯 くじ引きの履歴 (直近5回)</h3>
               <div id="normal-history-list" class="history-list-wrapper">
                 <p class="hint" style="text-align: center; padding: 1rem 0;">履歴はありません</p>
               </div>
             </div>
             <div>
-              <h3 style="font-size: 1rem; color: #fff; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.4rem;">🪑 席替えの履歴 (直近5回)</h3>
+              <h3 style="font-size: 1rem; color: var(--text-primary); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.4rem;">🪑 席替えの履歴 (直近5回)</h3>
               <div id="seating-history-list" class="history-list-wrapper">
                 <p class="hint" style="text-align: center; padding: 1rem 0;">履歴はありません</p>
               </div>
             </div>
+            <div>
+              <h3 style="font-size: 1rem; color: var(--text-primary); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.4rem;">🎡 ルーレットの履歴 (直近5回)</h3>
+              <div id="roulette-history-list" class="history-list-wrapper">
+                <p class="hint" style="text-align: center; padding: 1rem 0;">履歴はありません</p>
+              </div>
+            </div>
           </div>
-        </div>
+        </details>
 
         <button id="start-btn" class="primary-btn pulse-glow">抽選スタート</button>
       </section>
@@ -190,16 +217,37 @@
           </div>
         </div>
 
+        <!-- ルーレットモード用結果画面 -->
+        <div id="roulette-result-container" class="hidden-section" style="text-align: center; margin-bottom: 2rem;">
+          <div class="roulette-wheel-wrapper" style="position: relative; width: min(320px, 90vw); height: min(320px, 90vw); margin: 0 auto 2.5rem;">
+            <div class="roulette-pointer" style="position: absolute; top: -15px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 25px solid #ec4899; z-index: 5; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));"></div>
+            <canvas id="roulette-canvas" width="640" height="640" style="width: 100%; height: 100%; border-radius: 50%; box-shadow: 0 10px 30px rgba(0,0,0,0.5); background: #1e293b;"></canvas>
+          </div>
+          
+          <div id="roulette-winner-panel" class="winner-panel hidden-section" style="margin-top: 1.5rem; animation: popWinner 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;">
+            <p style="color: var(--text-secondary); font-size: 1rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: 0.1em;">🎉 当選者決定 🎉</p>
+            <div class="winner-display-wrapper" style="display: flex; flex-direction: column; align-items: center; gap: 1rem; background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border); padding: 1.8rem; border-radius: 16px; margin: 0 auto; max-width: 500px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
+              <div class="winner-text-container" style="width: 100%; overflow: hidden;">
+                <input type="text" id="roulette-winner-input" readonly style="width: 100%; font-size: 2.2rem; font-weight: 800; text-align: center; color: #fff; background: transparent; border: none; outline: none; cursor: text;" value="">
+              </div>
+              <button id="roulette-copy-btn" class="secondary-btn" style="position: relative; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.5rem; font-size: 0.95rem;">
+                <span class="copy-icon">📋</span>
+                <span class="copy-btn-text">名前をコピーする</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="result-actions" style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; width: 100%;">
           <button id="retry-btn" class="primary-btn" style="width: 100%;">同じ設定でもう一度</button>
           <div style="display: flex; gap: 1rem; width: 100%;">
             <button id="edit-btn" class="secondary-btn" style="flex: 1;">設定を編集</button>
-            <button id="home-btn" class="secondary-btn" style="flex: 1; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1);">最初から（ホーム）</button>
+            <button id="home-btn" class="secondary-btn" style="flex: 1;">最初から（ホーム）</button>
           </div>
         </div>
       </section>
     </main>
   </div>
-  <script src="script.js?v=1.1"></script>
+  <script src="script.js?v=2.1"></script>
 </body>
 </html>
