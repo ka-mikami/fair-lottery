@@ -816,6 +816,19 @@ body.light-theme #home-btn:hover {
   color: #0f172a;
 }
 
+/* 優先配置メンバーリストのコンテナスタイル */
+#priority-members-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.5rem;
+  max-height: 130px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+}
+
 /* 優先配置メンバーラベルのスタイリング (JavaScriptと連携) */
 .priority-member-label {
   display: flex;
@@ -853,22 +866,69 @@ body.light-theme .priority-member-label.checked {
 /* ==========================================================================
    ルーレット機能用スタイル
    ========================================================================== */
+
+/* ルーレット結果コンテナ */
+.roulette-result-container {
+  text-align: center;
+  margin-bottom: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+/* ルーレットホイール外枠 */
 .roulette-wheel-wrapper {
+  position: relative;
+  width: min(220px, 70vw);
+  height: min(220px, 70vw);
+  margin: 0 auto;
   perspective: 1000px;
 }
 
-/* ポインター（矢印）のライトテーマ時の色調整 */
+/* 針 */
+.roulette-pointer {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-top: 20px solid #ec4899;
+  z-index: 5;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+}
+
+/* ポインターのライトテーマ時の色調整 */
 body.light-theme .roulette-pointer {
   border-top-color: var(--accent-color) !important;
+}
+
+/* Canvas */
+#roulette-canvas {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+  background: #1e293b;
 }
 
 /* ルーレット盤のライトテーマ時背景 */
 body.light-theme #roulette-canvas {
   background: #ffffff !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15) !important;
 }
 
-/* 当選者パネルの出現アニメーション */
+/* 当選者決定パネル */
+.roulette-winner-panel {
+  width: 100%;
+  max-width: 450px;
+  margin: 0 auto;
+  animation: popWinner 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
 @keyframes popWinner {
   0% {
     opacity: 0;
@@ -880,13 +940,77 @@ body.light-theme #roulette-canvas {
   }
 }
 
-.winner-panel {
-  display: block;
+.roulette-winner-panel .winner-title {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  font-weight: 800;
+  margin-bottom: 0.4rem;
+  letter-spacing: 0.1em;
+}
+
+.winner-display-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-border);
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+
+.winner-text-container {
+  width: 100%;
+  overflow: hidden;
+}
+
+#roulette-winner-input {
+  width: 100%;
+  font-size: 1.8rem;
+  font-weight: 800;
+  text-align: center;
+  color: #fff;
+  background: transparent;
+  border: none;
+  outline: none;
+  cursor: text;
 }
 
 /* コピペ用インプットのライトテーマ調整 */
 body.light-theme #roulette-winner-input {
   color: #0f172a !important;
+}
+
+#roulette-copy-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.2rem;
+  font-size: 0.9rem;
+}
+
+/* PCサイズにおける2カラム横並びレイアウト */
+@media (min-width: 650px) {
+  .roulette-result-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    align-items: center;
+    max-width: 680px;
+    margin: 0 auto 1.5rem;
+    text-align: left;
+  }
+  
+  .roulette-wheel-wrapper {
+    margin: 0 auto;
+  }
+  
+  .roulette-winner-panel {
+    margin: 0;
+    text-align: center;
+  }
 }
 
 /* コピー完了時の一時的スタイル用 */
@@ -971,5 +1095,25 @@ body.light-theme .copy-success {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* 当選順リストの各項目 */
+.session-winner-item {
+  cursor: pointer;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  transition: background 0.2s, transform 0.1s;
+}
+.session-winner-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.session-winner-item.active-winner {
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+body.light-theme .session-winner-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+body.light-theme .session-winner-item.active-winner {
+  background: rgba(0, 0, 0, 0.08) !important;
 }
 

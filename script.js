@@ -33,6 +33,7 @@ const els = {
   
   // Option Settings
   weightToggle: document.getElementById('weight-toggle'),
+  seatingWeightSettings: document.getElementById('seating-weight-settings'),
   resetHistoryBtn: document.getElementById('reset-history-btn'),
   
   // Actions & Sections
@@ -51,7 +52,6 @@ const els = {
   sortTabs: document.querySelectorAll('.sort-tab'),
   retryBtn: document.getElementById('retry-btn'),
   editBtn: document.getElementById('edit-btn'),
-  homeBtn: document.getElementById('home-btn'),
   themeToggleBtn: document.getElementById('theme-toggle-btn'),
 
   // Roulette UI elements
@@ -81,6 +81,8 @@ let state = {
   rouletteHistory: [], // Roulette lottery history: max 5 items
   rouletteRemoveSelected: false, // Auto exclude toggle
   rouletteWinner: '', // Winner name
+  currentRouletteWinners: [], // Session winners list
+  isViewingHistory: false, // Flag to identify if viewing history
   theme: 'dark', // 'dark' or 'light'
   useWeighting: false,
   selectedSeatIndex: null // for mobile tap-to-swap
@@ -216,6 +218,15 @@ function bindEvents() {
         });
         document.getElementById(`${state.mode}-mode-content`).classList.remove('hidden-section');
         
+        // Toggle seating weight settings visibility
+        if (els.seatingWeightSettings) {
+          if (state.mode === 'seating') {
+            els.seatingWeightSettings.style.display = 'flex';
+          } else {
+            els.seatingWeightSettings.style.display = 'none';
+          }
+        }
+        
         updateValidation();
       });
     });
@@ -258,7 +269,7 @@ function bindEvents() {
   });
 
   // Actions
-  els.startBtn.addEventListener('click', startLottery);
+  els.startBtn.addEventListener('click', () => startLottery(false));
   els.retryBtn.addEventListener('click', () => {
     const participants = getParticipants();
     if (participants.length === 0) {
@@ -268,7 +279,7 @@ function bindEvents() {
       return;
     }
     els.resultSection.classList.replace('active-section', 'hidden-section');
-    startLottery();
+    startLottery(true);
   });
   els.editBtn.addEventListener('click', () => {
     if (window.rouletteAnimFrameId) {
@@ -278,10 +289,6 @@ function bindEvents() {
     els.resultSection.classList.replace('active-section', 'hidden-section');
     els.setupSection.classList.replace('hidden-section', 'active-section');
   });
-  if (els.homeBtn) {
-    els.homeBtn.addEventListener('click', resetToHome);
-  }
-
   // Auto Numbering
   els.autoNumberBtn.addEventListener('click', () => {
     const pCount = getParticipants().length;
@@ -814,11 +821,15 @@ function saveSeatingResultToHistory(rows, cols) {
   } catch (err) {}
 }
 
-function startLottery() {
+function startLottery(isRetry = false) {
   state.selectedSeatIndex = null; // Reset selection state
+  state.isViewingHistory = false; // Reset history viewing flag
   
   // Save participants list to history
-  saveParticipantsTextToHistory();
+  if (!isRetry) {
+    saveParticipantsTextToHistory();
+    state.currentRouletteWinners = [];
+  }
   
   const participants = getParticipants();
   if (participants.length === 0) {
@@ -977,7 +988,7 @@ function startLottery() {
     // Roulette mode lottery
     const shuffled = secureShuffle(participants);
     state.rouletteWinner = shuffled[0];
-    saveRouletteToHistory();
+    saveRouletteToHistory(isRetry);
   }
 
   // UI transition
@@ -1008,8 +1019,17 @@ function startLottery() {
 }
 
 function showResult() {
+  // Show or hide retry button depending on history viewing mode
+  if (els.retryBtn) {
+    if (state.isViewingHistory) {
+      els.retryBtn.style.display = 'none';
+    } else {
+      els.retryBtn.style.display = 'block';
+    }
+  }
+
   // Enable buttons by default (will be disabled during roulette spin)
-  [els.retryBtn, els.editBtn, els.homeBtn].forEach(btn => {
+  [els.retryBtn, els.editBtn].forEach(btn => {
     if (btn) {
       btn.disabled = false;
       btn.style.opacity = '1';
@@ -1353,81 +1373,7 @@ function saveParticipantsTextToHistory() {
   updateParticipantsHistorySelect();
 }
 
-function resetToHome() {
-  if (!confirm('入力データや現在の設定をすべてリセットしてホーム画面に戻ります。よろしいですか？')) {
-    return;
-  }
 
-  // Cancel any active roulette animation
-  if (window.rouletteAnimFrameId) {
-    cancelAnimationFrame(window.rouletteAnimFrameId);
-    window.rouletteAnimFrameId = null;
-  }
-
-  // 1. Clear participant inputs
-  els.participantsText.value = '';
-  els.participantsNumber.value = 5;
-  
-  // 2. Clear tab targets
-  state.inputType = 'names-input';
-  document.querySelectorAll('.tab[data-target]').forEach(tab => {
-    if (tab.dataset.target === 'names-input') tab.classList.add('active');
-    else tab.classList.remove('active');
-  });
-  
-  const namesInput = document.getElementById('names-input');
-  const numberInput = document.getElementById('number-input');
-  if (namesInput && numberInput) {
-    namesInput.classList.remove('hidden');
-    namesInput.classList.add('active');
-    numberInput.classList.remove('active');
-    numberInput.classList.add('hidden');
-  }
-
-  // 3. Reset roles to default
-  state.roles = [
-    { id: 1, name: '当たり', count: 1 },
-    { id: 2, name: 'ハズレ', count: 4 }
-  ];
-  state.nextRoleId = 3;
-  renderRoles();
-
-  // 4. Reset seating size to default
-  if (els.seatingRows && els.seatingCols) {
-    els.seatingRows.value = 5;
-    els.seatingCols.value = 6;
-  }
-  
-  // 5. Clear selected priority members
-  if (els.priorityMembersList) {
-    els.priorityMembersList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-  }
-
-  // 5.5. Reset roulette remove option
-  state.rouletteRemoveSelected = false;
-  if (els.rouletteRemoveToggle) {
-    els.rouletteRemoveToggle.checked = false;
-    try {
-      localStorage.setItem('rouletteRemoveSelected', 'false');
-    } catch (e) {}
-  }
-
-  // 6. Update counts and warnings
-  updateParticipantCount();
-  updateResultsHistoryList();
-  
-  // 7. Reset results and sorting states
-  state.finalResult = [];
-  state.finalSeatingResult = [];
-  state.rouletteWinner = '';
-  els.rouletteWinnerInput.value = '';
-  state.currentSort = 'random';
-  state.selectedSeatIndex = null;
-  
-  // 8. Navigate back to setup section
-  els.resultSection.classList.replace('active-section', 'hidden-section');
-  els.setupSection.classList.replace('hidden-section', 'active-section');
-}
 
 function saveNormalLotteryToHistory() {
   const newEvent = {
@@ -1532,10 +1478,17 @@ function updateResultsHistoryList() {
         const date = new Date(h.timestamp);
         const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
 
+        const winners = h.winners || [h.winner];
+        const firstWinner = getDisplayName(winners[0]);
+        const otherCount = winners.length - 1;
+        const displaySummary = otherCount > 0 ? `${firstWinner} 他${otherCount}名` : firstWinner;
+        const totalParticipants = h.initialParticipantsCount || h.participantsCount || (winners.length + (h.participantsCount || 0));
+
         row.innerHTML = `
-          <div class="history-item-info">
+          <div class="history-item-info" style="flex: 1; min-width: 0; margin-right: 0.5rem;">
             <span class="history-item-time">${dateStr}</span>
-            <span>当選: ${getDisplayName(h.winner)} (総数:${h.participantsCount}人)</span>
+            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600;" title="${escapeHTML(winners.map(w => getDisplayName(w)).join(' ➔ '))} font-weight: 600;">当選: ${escapeHTML(displaySummary)}</span>
+            <span style="font-size: 0.75rem; color: var(--text-secondary);">（開始時: ${totalParticipants}人）</span>
           </div>
           <button class="history-item-btn" onclick="loadRouletteHistory(${index})">結果を見る</button>
         `;
@@ -1549,6 +1502,7 @@ function loadNormalHistoryItem(index) {
   if (!state.normalHistory || !state.normalHistory[index]) return;
   const item = state.normalHistory[index];
   
+  state.isViewingHistory = true;
   state.finalResult = item.result;
   state.mode = 'normal';
   
@@ -1575,6 +1529,7 @@ function loadSeatingHistoryItem(index) {
   if (!state.history || !state.history[index]) return;
   const item = state.history[index];
   
+  state.isViewingHistory = true;
   const rows = item.rows;
   const cols = item.cols;
   
@@ -1615,19 +1570,31 @@ window.loadNormalHistory = loadNormalHistoryItem;
 window.loadSeatingHistory = loadSeatingHistoryItem;
 window.loadRouletteHistory = loadRouletteHistoryItem;
 
-function saveRouletteToHistory() {
-  const newEvent = {
-    timestamp: Date.now(),
-    winner: state.rouletteWinner,
-    participantsCount: getParticipants().length,
-    removed: state.rouletteRemoveSelected
-  };
-
+function saveRouletteToHistory(isRetry = false) {
   if (!state.rouletteHistory) {
     state.rouletteHistory = [];
   }
 
-  state.rouletteHistory.push(newEvent);
+  if (isRetry && state.rouletteHistory.length > 0) {
+    // リトライ時は既存の最新セッションに当選者を追加
+    const currentSession = state.rouletteHistory[state.rouletteHistory.length - 1];
+    if (!currentSession.winners) {
+      currentSession.winners = [currentSession.winner || state.rouletteWinner];
+    }
+    if (!currentSession.winners.includes(state.rouletteWinner)) {
+      currentSession.winners.push(state.rouletteWinner);
+    }
+    currentSession.timestamp = Date.now();
+  } else {
+    // 新規開始時は新しいセッションを作成
+    const newEvent = {
+      timestamp: Date.now(),
+      winners: [state.rouletteWinner],
+      initialParticipantsCount: getParticipants().length,
+      removed: state.rouletteRemoveSelected
+    };
+    state.rouletteHistory.push(newEvent);
+  }
 
   while (state.rouletteHistory.length > 5) {
     state.rouletteHistory.shift();
@@ -1650,7 +1617,7 @@ function runRouletteAnimation() {
   if (count === 0) return;
 
   // Disable action buttons during spin to prevent double-triggering or state corruption
-  [els.retryBtn, els.editBtn, els.homeBtn].forEach(btn => {
+  [els.retryBtn, els.editBtn].forEach(btn => {
     if (btn) {
       btn.disabled = true;
       btn.style.opacity = '0.5';
@@ -1749,8 +1716,14 @@ function runRouletteAnimation() {
       els.rouletteWinnerInput.value = getDisplayName(winner);
       els.rouletteWinnerPanel.classList.remove('hidden-section');
       
+      // Add to session winners list and update UI
+      if (!state.currentRouletteWinners.includes(winner)) {
+        state.currentRouletteWinners.push(winner);
+      }
+      updateRouletteSessionWinnersUI(state.currentRouletteWinners);
+      
       // Re-enable action buttons after spin completes
-      [els.retryBtn, els.editBtn, els.homeBtn].forEach(btn => {
+      [els.retryBtn, els.editBtn].forEach(btn => {
         if (btn) {
           btn.disabled = false;
           btn.style.opacity = '1';
@@ -1792,7 +1765,12 @@ function loadRouletteHistoryItem(index) {
   if (!state.rouletteHistory || !state.rouletteHistory[index]) return;
   const item = state.rouletteHistory[index];
 
-  state.rouletteWinner = item.winner;
+  state.isViewingHistory = true;
+  const winners = item.winners || [item.winner];
+  const lastWinner = winners[winners.length - 1];
+
+  state.rouletteWinner = lastWinner;
+  state.currentRouletteWinners = [...winners];
   state.mode = 'roulette';
 
   if (els.modeTabs) {
@@ -1811,10 +1789,26 @@ function loadRouletteHistoryItem(index) {
   els.seatingResultContainer.classList.add('hidden-section');
   els.rouletteResultContainer.classList.remove('hidden-section');
 
-  els.rouletteWinnerInput.value = getDisplayName(item.winner);
+  els.rouletteWinnerInput.value = getDisplayName(lastWinner);
   els.rouletteWinnerPanel.classList.remove('hidden-section');
   
-  drawStaticWheel(item.winner, item.participantsCount);
+  // Update session list UI
+  updateRouletteSessionWinnersUI(winners);
+
+  // Hide retry button and reset action buttons state for history view
+  if (els.retryBtn) {
+    els.retryBtn.style.display = 'none';
+  }
+  [els.retryBtn, els.editBtn].forEach(btn => {
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+    }
+  });
+
+  const totalCount = item.initialParticipantsCount || item.participantsCount || 10;
+  drawStaticWheel(lastWinner, totalCount);
 
   const date = new Date(item.timestamp);
   const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
@@ -1879,6 +1873,42 @@ function drawStaticWheel(winner, totalCount) {
   ctx.strokeStyle = '#1e293b';
   ctx.lineWidth = 5;
   ctx.stroke();
+}
+
+function updateRouletteSessionWinnersUI(winners) {
+  const container = document.getElementById('roulette-session-winners');
+  const list = document.getElementById('roulette-session-list');
+  if (!container || !list) return;
+
+  list.innerHTML = '';
+  if (winners && winners.length > 0) {
+    winners.forEach((w, index) => {
+      const li = document.createElement('li');
+      li.className = 'session-winner-item';
+      
+      // 最初は現在選択されている当選者をアクティブにする
+      if (w === state.rouletteWinner) {
+        li.classList.add('active-winner');
+      }
+      
+      li.innerHTML = `<span style="color: var(--text-secondary); margin-right: 0.5rem; font-size: 0.85rem;">#${index + 1}</span> ${escapeHTML(getDisplayName(w))}`;
+      
+      li.addEventListener('click', () => {
+        list.querySelectorAll('li').forEach(item => {
+          item.classList.remove('active-winner');
+        });
+        li.classList.add('active-winner');
+        
+        state.rouletteWinner = w;
+        els.rouletteWinnerInput.value = getDisplayName(w);
+      });
+      
+      list.appendChild(li);
+    });
+    container.style.display = 'block';
+  } else {
+    container.style.display = 'none';
+  }
 }
 
 // Start
