@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fair Lottery - 公平なくじ</title>
   <meta name="description" content="人数や役割を自由に設定できる、明確に公平なくじアプリです。">
-  <link rel="stylesheet" href="style.css?v=3.1">
+  <link rel="stylesheet" href="style.css?v=5.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+JP:wght@400;600;800&display=swap" rel="stylesheet">
@@ -196,10 +196,15 @@
         
         <!-- 通常モード用結果画面 -->
         <div id="normal-result-container">
-          <div class="result-sort-tabs" style="display: flex; justify-content: center; gap: 0.8rem; margin-bottom: 1.5rem;">
-            <button class="sort-tab active" data-sort="random">シャッフル順</button>
-            <button class="sort-tab" data-sort="name">名前順</button>
-            <button class="sort-tab" data-sort="role">番号・役割順</button>
+          <div class="result-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+            <div class="result-sort-tabs" style="display: flex; gap: 0.8rem;">
+              <button class="sort-tab active" data-sort="random">シャッフル順</button>
+              <button class="sort-tab" data-sort="name">名前順</button>
+              <button class="sort-tab" data-sort="role">番号・役割順</button>
+            </div>
+            <button id="copy-normal-result-btn" class="secondary-btn" style="padding: 0.45rem 1rem; font-size: 0.85rem; border-radius: 8px; display: flex; align-items: center; gap: 0.4rem;" title="結果をコピー">
+              <span class="copy-icon">📋</span> 結果をコピー
+            </button>
           </div>
           <div class="result-scroll">
             <ul id="result-list"></ul>
@@ -208,13 +213,35 @@
 
         <!-- 席替えモード用結果画面 -->
         <div id="seating-result-container" class="hidden-section">
-          <p class="seating-hint" style="text-align: center; margin-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.95rem; font-weight: 600;">💡 席をドラッグ＆ドロップ、または2つの席を順番にタップすることで、自由に配置を入れ替えられます！</p>
-          <div class="teacher-desk-wrapper" style="text-align: center; margin-bottom: 2rem;">
-            <div class="teacher-desk" style="display: inline-block; padding: 0.6rem 2.5rem; background: rgba(255,255,255,0.08); border: 1px solid var(--glass-border); border-radius: 8px; font-weight: 800; color: var(--text-secondary); font-size: 0.95rem; letter-spacing: 0.2em;">教壇 (前)</div>
+          <p id="seating-instruction-hint" class="seating-hint" style="text-align: center; margin-bottom: 1.2rem; color: var(--text-secondary); font-size: 0.95rem; font-weight: 600;">💡 席をドラッグ＆ドロップ、または2つの席を順番にタップすることで、自由に配置を入れ替えられます！</p>
+          
+          <!-- フリー配置ツールバー -->
+          <div class="seating-toolbar" style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+            <div class="mode-toggle-group" style="display: flex; background: rgba(255,255,255,0.05); padding: 0.25rem; border-radius: 8px; border: 1px solid var(--glass-border);">
+              <button id="btn-seating-grid-mode" class="toolbar-tab active" style="padding: 0.4rem 1rem; border-radius: 6px; border: none; background: transparent; color: var(--text-primary); font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;">🪑 整列モード</button>
+              <button id="btn-seating-free-mode" class="toolbar-tab" style="padding: 0.4rem 1rem; border-radius: 6px; border: none; background: transparent; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;">🎨 フリー配置</button>
+            </div>
+            
+            <!-- Undo / Redo ボタン -->
+            <div class="undo-redo-group" style="display: flex; background: rgba(255,255,255,0.05); padding: 0.25rem; border-radius: 8px; border: 1px solid var(--glass-border); gap: 0.2rem;">
+              <button id="btn-undo" class="toolbar-btn" style="padding: 0.4rem 0.8rem; border-radius: 6px; border: none; background: transparent; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px;" title="元に戻す (Ctrl+Z)" disabled>↩️ 戻る</button>
+              <button id="btn-redo" class="toolbar-btn" style="padding: 0.4rem 0.8rem; border-radius: 6px; border: none; background: transparent; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px;" title="やり直す (Ctrl+Y)" disabled>↪️ 進む</button>
+            </div>
+
+            <button id="btn-add-group-frame" class="secondary-btn" style="display: none; padding: 0.45rem 1rem; font-size: 0.85rem; border-radius: 8px; align-items: center; gap: 0.3rem;"><span style="font-size: 1.1rem; line-height: 1;">＋</span> 班の枠を追加</button>
+            <button id="btn-reset-layout" class="secondary-btn" style="display: none; padding: 0.45rem 1rem; font-size: 0.85rem; border-radius: 8px; color: #ef4444; border-color: rgba(239, 68, 68, 0.2); align-items: center; gap: 0.3rem;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> 整列に戻す</button>
+            <button id="btn-download-seating" class="secondary-btn" style="padding: 0.45rem 1rem; font-size: 0.85rem; border-radius: 8px; align-items: center; gap: 0.4rem; display: flex;" title="座席配置を画像として保存"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> 📸 画像で保存</button>
           </div>
-          <div class="seating-scroll" style="overflow-x: auto; width: 100%; margin-bottom: 2.5rem; padding-bottom: 1rem;">
-            <div id="seating-grid" style="display: grid; gap: 0.8rem; margin: 0 auto; justify-content: center; width: max-content;">
-              <!-- 座席が動的に配置される -->
+
+          <!-- 画像保存対象のエリア -->
+          <div id="seating-capture-area" style="padding: 1.2rem; border-radius: 16px; margin-bottom: 0.5rem; transition: background 0.3s; position: relative;">
+            <div class="teacher-desk-wrapper" style="text-align: center; margin-bottom: 2rem;">
+              <div class="teacher-desk" style="display: inline-block; padding: 0.6rem 2.5rem; background: rgba(255,255,255,0.08); border: 1px solid var(--glass-border); border-radius: 8px; font-weight: 800; color: var(--text-secondary); font-size: 0.95rem; letter-spacing: 0.2em;">教壇 (前)</div>
+            </div>
+            <div id="seating-scroll-container" class="seating-scroll" style="overflow: auto; width: 100%; margin-bottom: 1rem; padding-bottom: 1rem;">
+              <div id="seating-grid" style="display: grid; gap: 0.8rem; margin: 0 auto; justify-content: center; width: max-content; position: relative;">
+                <!-- 座席が動的に配置される -->
+              </div>
             </div>
           </div>
         </div>
@@ -259,6 +286,7 @@
       </section>
     </main>
   </div>
-  <script src="script.js?v=2.2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="script.js?v=5.0"></script>
 </body>
 </html>

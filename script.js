@@ -48,6 +48,7 @@ const els = {
   seatingResultContainer: document.getElementById('seating-result-container'),
   rouletteResultContainer: document.getElementById('roulette-result-container'),
   resultList: document.getElementById('result-list'),
+  copyNormalResultBtn: document.getElementById('copy-normal-result-btn'),
   seatingGrid: document.getElementById('seating-grid'),
   sortTabs: document.querySelectorAll('.sort-tab'),
   retryBtn: document.getElementById('retry-btn'),
@@ -60,8 +61,23 @@ const els = {
   rouletteCanvas: document.getElementById('roulette-canvas'),
   rouletteWinnerPanel: document.getElementById('roulette-winner-panel'),
   rouletteWinnerInput: document.getElementById('roulette-winner-input'),
-  rouletteCopyBtn: document.getElementById('roulette-copy-btn')
+  rouletteCopyBtn: document.getElementById('roulette-copy-btn'),
+  
+  // Free Layout UI elements
+  btnSeatingGridMode: document.getElementById('btn-seating-grid-mode'),
+  btnSeatingFreeMode: document.getElementById('btn-seating-free-mode'),
+  btnUndo: document.getElementById('btn-undo'),
+  btnRedo: document.getElementById('btn-redo'),
+  btnAddGroupFrame: document.getElementById('btn-add-group-frame'),
+  btnResetLayout: document.getElementById('btn-reset-layout'),
+  btnDownloadSeating: document.getElementById('btn-download-seating'),
+  seatingScrollContainer: document.getElementById('seating-scroll-container'),
+  seatingInstructionHint: document.getElementById('seating-instruction-hint')
 };
+
+// Undo / Redo Stacks
+let undoStack = [];
+let redoStack = [];
 
 // State
 let state = {
@@ -85,7 +101,13 @@ let state = {
   isViewingHistory: false, // Flag to identify if viewing history
   theme: 'dark', // 'dark' or 'light'
   useWeighting: false,
-  selectedSeatIndex: null // for mobile tap-to-swap
+  seatingLayout: [], // Custom seat layouts (true = seat, false = aisle)
+  selectedSeatIndex: null, // for mobile tap-to-swap
+  seatingMode: 'grid', // 'grid' or 'free'
+  freeSeats: [], // position coordinates [{name, x, y}]
+  freeGroups: [], // resizable group frames [{id, name, x, y, w, h}]
+  nextGroupId: 1,
+  activeGroupId: null // currently selected group frame ID
 };
 
 // Roulette Color Palette
@@ -567,6 +589,126 @@ function bindEvents() {
       });
     });
   }
+
+  // Normal Result Copy Button Event
+  if (els.copyNormalResultBtn) {
+    els.copyNormalResultBtn.addEventListener('click', () => {
+      const items = els.resultList.querySelectorAll('.result-item');
+      if (items.length === 0) return;
+      
+      let textToCopy = '【抽選結果】\n';
+      items.forEach((item, index) => {
+        const nameEl = item.querySelector('.result-name');
+        const roleEl = item.querySelector('.result-role');
+        const name = nameEl ? nameEl.textContent.trim() : '';
+        const role = roleEl && roleEl.textContent.trim() !== '設定なし' ? ` - ${roleEl.textContent.trim()}` : '';
+        textToCopy += `${index + 1}. ${name}${role}\n`;
+      });
+
+      navigator.clipboard.writeText(textToCopy.trim()).then(() => {
+        const origHtml = els.copyNormalResultBtn.innerHTML;
+        els.copyNormalResultBtn.innerHTML = '<span class="material-icons" style="color: #10b981;">check</span> コピー完了！';
+        els.copyNormalResultBtn.style.color = '#10b981';
+        els.copyNormalResultBtn.style.borderColor = '#10b981';
+        setTimeout(() => {
+          els.copyNormalResultBtn.innerHTML = origHtml;
+          els.copyNormalResultBtn.style.color = '';
+          els.copyNormalResultBtn.style.borderColor = '';
+        }, 1500);
+      }).catch(err => {
+        alert('コピーに失敗しました。');
+      });
+    });
+  }
+
+  // Free Layout Toolbar Events
+  if (els.btnSeatingGridMode && els.btnSeatingFreeMode) {
+    els.btnSeatingGridMode.addEventListener('click', () => {
+      if (state.seatingMode === 'grid') return;
+      toggleFreeLayoutMode('grid');
+    });
+
+    els.btnSeatingFreeMode.addEventListener('click', () => {
+      if (state.seatingMode === 'free') return;
+      toggleFreeLayoutMode('free');
+    });
+  }
+
+  if (els.btnAddGroupFrame) {
+    els.btnAddGroupFrame.addEventListener('click', () => {
+      if (state.seatingMode !== 'free') return;
+      
+      const presetColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316'];
+      const randomColor = presetColors[state.freeGroups.length % presetColors.length];
+      
+      const newGroup = {
+        id: state.nextGroupId++,
+        name: `班 ${state.nextGroupId - 1}`,
+        x: 100 + Math.random() * 50,
+        y: 100 + Math.random() * 50,
+        w: 240,
+        h: 180,
+        color: randomColor
+      };
+      
+      state.freeGroups.push(newGroup);
+      addGroupFrame(newGroup);
+      
+      // Save changes to history
+      const rows = parseInt(els.seatingRows.value) || 0;
+      const cols = parseInt(els.seatingCols.value) || 0;
+      updateHistoryAfterSwap(rows, cols);
+    });
+  }
+
+  if (els.btnResetLayout) {
+    els.btnResetLayout.addEventListener('click', () => {
+      if (confirm('フリー配置と作成した班の枠をすべてリセットし、元の整列状態に戻しますか？')) {
+        resetToGridLayout();
+      }
+    });
+  }
+
+  if (els.btnUndo) {
+    els.btnUndo.addEventListener('click', handleUndo);
+  }
+  if (els.btnRedo) {
+    els.btnRedo.addEventListener('click', handleRedo);
+  }
+  if (els.btnDownloadSeating) {
+    els.btnDownloadSeating.addEventListener('click', downloadSeatingImage);
+  }
+
+  // キャンバス背景クリックで選択解除
+  if (els.seatingScrollContainer) {
+    const handleCanvasClick = (e) => {
+      if (state.seatingMode !== 'free') return;
+      // クリックターゲットがキャンバス背景自体、またはグリッドコンテナの場合のみ解除
+      if (e.target === els.seatingScrollContainer || e.target === els.seatingGrid) {
+        setActiveGroup(null);
+      }
+    };
+    els.seatingScrollContainer.addEventListener('mousedown', handleCanvasClick);
+    els.seatingScrollContainer.addEventListener('touchstart', handleCanvasClick, { passive: true });
+  }
+
+  // キーボードショートカット (Ctrl+Z / Ctrl+Y)
+  document.addEventListener('keydown', (e) => {
+    // 席替え結果画面が表示されている時のみ動作
+    if (els.resultSection && els.resultSection.classList.contains('active-section') && state.mode === 'seating') {
+      // テキスト入力中はショートカットを無効化
+      if (e.target.closest('input, textarea, [contenteditable="true"]')) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        handleUndo();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    }
+  });
 }
 
 function getParticipants() {
@@ -711,19 +853,27 @@ function updateValidation() {
     // Seating mode validation
     const rows = parseInt(els.seatingRows.value) || 0;
     const cols = parseInt(els.seatingCols.value) || 0;
-    const seats = rows * cols;
-    els.totalSeatsDisplay.textContent = seats;
+    const totalSeats = rows * cols;
+    
+    // 同期処理
+    if (state.seatingLayout.length !== totalSeats) {
+      state.seatingLayout = Array.from({ length: totalSeats }, () => true);
+    }
+
+    let availableSeatsCount = totalSeats;
+
+    els.totalSeatsDisplay.textContent = availableSeatsCount;
     
     if (pCount === 0) {
       els.seatingWarning.textContent = '参加者が設定されていません。';
       els.startBtn.disabled = true;
       els.startBtn.style.opacity = '0.5';
-    } else if (pCount > seats) {
-      els.seatingWarning.textContent = `席数(${seats}席)が足りません！参加者(${pCount}人)が入るよう、行または列を増やしてください。`;
+    } else if (pCount > availableSeatsCount) {
+      els.seatingWarning.textContent = `配置可能な席数(${availableSeatsCount}席)が足りません！行または列を増やしてください。`;
       els.startBtn.disabled = true;
       els.startBtn.style.opacity = '0.5';
     } else {
-      const emptyCount = seats - pCount;
+      const emptyCount = availableSeatsCount - pCount;
       els.seatingWarning.textContent = emptyCount > 0 ? `空席が ${emptyCount} 席できます。` : '';
       els.startBtn.disabled = false;
       els.startBtn.style.opacity = '1';
@@ -806,6 +956,11 @@ function saveSeatingResultToHistory(rows, cols) {
     timestamp: Date.now(),
     rows: rows,
     cols: cols,
+    seatingLayout: [...state.seatingLayout],
+    seatingMode: state.seatingMode,
+    freeSeats: JSON.parse(JSON.stringify(state.freeSeats)),
+    freeGroups: JSON.parse(JSON.stringify(state.freeGroups)),
+    nextGroupId: state.nextGroupId,
     result: result
   };
   
@@ -822,6 +977,10 @@ function saveSeatingResultToHistory(rows, cols) {
 }
 
 function startLottery(isRetry = false) {
+  // Undo/Redoスタックの初期化
+  undoStack = [];
+  redoStack = [];
+  
   state.selectedSeatIndex = null; // Reset selection state
   state.isViewingHistory = false; // Reset history viewing flag
   
@@ -876,6 +1035,11 @@ function startLottery(isRetry = false) {
     const cols = parseInt(els.seatingCols.value) || 0;
     const totalSeats = rows * cols;
     
+    // 新規抽選の場合は、すべての席を机（通路なし）に初期化
+    if (!isRetry) {
+      state.seatingLayout = Array.from({ length: totalSeats }, () => true);
+    }
+    
     // Initialize seat mapping
     state.finalSeatingResult = Array.from({ length: totalSeats }, () => null);
 
@@ -885,22 +1049,31 @@ function startLottery(isRetry = false) {
       priorityMembers.push(cb.value);
     });
 
-    // 2. Identify priority seats (Front 2 rows: row < 2)
+    // 2. Identify priority seats (Front 2 rows: row < 2) amongst non-aisle seats, front-packed
     // If rows <= 2, prioritize row < 1 (front 1 row). If rows === 1, prioritize the whole row.
     const priorityLimitRow = rows <= 2 ? 1 : 2;
     const prioritySeats = [];
     const regularSeats = [];
     
+    // Filter out aisle seats first
+    const allAvailableSeats = [];
     for (let seatIdx = 0; seatIdx < totalSeats; seatIdx++) {
-      if (seatIdx >= participants.length) continue; // Only consider occupied seats (front-packing)
-      
+      if (state.seatingLayout[seatIdx] !== false) {
+        allAvailableSeats.push(seatIdx);
+      }
+    }
+    
+    // Consider only occupied seats (front-packing) based on participants count
+    const activeSeats = allAvailableSeats.slice(0, participants.length);
+    
+    activeSeats.forEach(seatIdx => {
       const row = Math.floor(seatIdx / cols);
       if (row < priorityLimitRow) {
         prioritySeats.push(seatIdx);
       } else {
         regularSeats.push(seatIdx);
       }
-    }
+    });
 
     // 3. Shuffle priority members and assign them to randomly selected priority seats
     const shuffledPriorityMembers = secureShuffle(priorityMembers);
@@ -986,7 +1159,15 @@ function startLottery(isRetry = false) {
     saveSeatingResultToHistory(rows, cols);
   } else {
     // Roulette mode lottery
-    const shuffled = secureShuffle(participants);
+    let roulettePool = participants;
+    if (state.rouletteRemoveSelected && state.currentRouletteWinners.length > 0) {
+      roulettePool = participants.filter(p => !state.currentRouletteWinners.includes(p));
+    }
+    if (roulettePool.length === 0) {
+      alert('ルーレットを回す参加者がいません。');
+      return;
+    }
+    const shuffled = secureShuffle(roulettePool);
     state.rouletteWinner = shuffled[0];
     saveRouletteToHistory(isRetry);
   }
@@ -1019,6 +1200,12 @@ function startLottery(isRetry = false) {
 }
 
 function showResult() {
+  // Undoスタックの初期状態のプッシュとボタン表示更新
+  if (state.mode === 'seating' && undoStack.length === 0) {
+    undoStack.push(getSnapshot());
+    updateUndoRedoButtons();
+  }
+
   // Show or hide retry button depending on history viewing mode
   if (els.retryBtn) {
     if (state.isViewingHistory) {
@@ -1089,53 +1276,191 @@ function showResult() {
     els.seatingResultContainer.classList.remove('hidden-section');
     els.rouletteResultContainer.classList.add('hidden-section');
     
+    // Clear previous group frames from DOM
+    document.querySelectorAll('.group-frame').forEach(f => f.remove());
+    
     els.seatingGrid.innerHTML = '';
     
     const rows = parseInt(els.seatingRows.value) || 0;
     const cols = parseInt(els.seatingCols.value) || 0;
+
+    // Show/hide toolbar buttons according to state.seatingMode
+    if (els.btnSeatingGridMode && els.btnSeatingFreeMode && els.btnAddGroupFrame && els.btnResetLayout) {
+      if (state.seatingMode === 'free') {
+        els.btnSeatingGridMode.classList.remove('active');
+        els.btnSeatingGridMode.style.color = 'var(--text-secondary)';
+        els.btnSeatingFreeMode.classList.add('active');
+        els.btnSeatingFreeMode.style.color = '#ffffff';
+        
+        els.btnAddGroupFrame.style.display = 'flex';
+        els.btnResetLayout.style.display = 'flex';
+        els.seatingInstructionHint.textContent = '💡 席カードや班の枠をドラッグして、自由なレイアウトやチーム分けをデザインできます！';
+        
+        els.seatingScrollContainer.classList.add('free-layout-canvas');
+        els.seatingGrid.style.display = 'block';
+        els.seatingGrid.style.width = '100%';
+        els.seatingGrid.style.minWidth = '800px';
+        els.seatingGrid.style.height = '500px';
+      } else {
+        els.btnSeatingGridMode.classList.add('active');
+        els.btnSeatingGridMode.style.color = '#ffffff';
+        els.btnSeatingFreeMode.classList.remove('active');
+        els.btnSeatingFreeMode.style.color = 'var(--text-secondary)';
+        
+        els.btnAddGroupFrame.style.display = 'none';
+        els.btnResetLayout.style.display = 'none';
+        els.seatingInstructionHint.textContent = '💡 席をドラッグ＆ドロップ、または2つの席を順番にタップすることで、自由に配置を入れ替えられます！';
+        
+        els.seatingScrollContainer.classList.remove('free-layout-canvas');
+        els.seatingGrid.style.display = 'grid';
+        els.seatingGrid.style.width = 'max-content';
+        els.seatingGrid.style.minWidth = 'unset';
+        els.seatingGrid.style.height = 'auto';
+      }
+    }
     
-    els.seatingGrid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    // Calculate dynamic column widths and heights for grid layout (for absolute placement calculation)
+    const colWidths = [];
+    for (let c = 0; c < cols; c++) {
+      let isAllAisle = true;
+      for (let r = 0; r < rows; r++) {
+        const idx = r * cols + c;
+        if (state.seatingLayout[idx] !== false) {
+          isAllAisle = false;
+          break;
+        }
+      }
+      colWidths.push(isAllAisle ? '20px' : '1fr');
+    }
     
+    const rowHeights = [];
+    for (let r = 0; r < rows; r++) {
+      let isAllAisle = true;
+      for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
+        if (state.seatingLayout[idx] !== false) {
+          isAllAisle = false;
+          break;
+        }
+      }
+      rowHeights.push(isAllAisle ? '20px' : 'auto');
+    }
+
+    if (state.seatingMode !== 'free') {
+      els.seatingGrid.style.gridTemplateColumns = colWidths.map(w => w === '20px' ? '20px' : '1fr').join(' ');
+      els.seatingGrid.style.gridTemplateRows = rowHeights.map(h => h === '20px' ? '20px' : 'auto').join(' ');
+    }
+    
+    let seatNumber = 1;
     state.finalSeatingResult.forEach((person, idx) => {
-      const seatDiv = document.createElement('div');
-      seatDiv.className = 'seat';
-      seatDiv.setAttribute('draggable', 'true');
-      seatDiv.dataset.index = idx;
-      
-      // Stagger by grid distance
       const r = Math.floor(idx / cols);
       const c = idx % cols;
+
+      if (state.seatingLayout[idx] === false) {
+        if (state.seatingMode !== 'free') {
+          // Grid mode renders aisle seats as empty invisible blocks
+          const seatDiv = document.createElement('div');
+          seatDiv.dataset.index = idx;
+          seatDiv.style.animationDelay = `${(r + c) * 0.05}s`;
+          seatDiv.className = 'seat aisle';
+          els.seatingGrid.appendChild(seatDiv);
+        }
+        return;
+      }
+      
+      const currentSeatNumber = seatNumber++;
+      const seatDiv = document.createElement('div');
+      seatDiv.dataset.index = idx;
       seatDiv.style.animationDelay = `${(r + c) * 0.05}s`;
       
       if (person) {
-        seatDiv.classList.add('occupied');
-        seatDiv.title = person; // Full name tooltip on hover
+        seatDiv.title = person;
         seatDiv.innerHTML = `
-          <span class="seat-number">席 ${idx + 1}</span>
+          <span class="seat-number">席 ${currentSeatNumber}</span>
           <span class="seat-name" title="${escapeHTML(person)}">${escapeHTML(getDisplayName(person))}</span>
         `;
       } else {
-        seatDiv.classList.add('empty');
         seatDiv.title = '空席';
         seatDiv.innerHTML = `
-          <span class="seat-number">席 ${idx + 1}</span>
+          <span class="seat-number">席 ${currentSeatNumber}</span>
           <span class="seat-name">空席</span>
         `;
       }
 
-      // Drag & Drop Events
-      seatDiv.addEventListener('dragstart', handleDragStart);
-      seatDiv.addEventListener('dragover', handleDragOver);
-      seatDiv.addEventListener('dragenter', handleDragEnter);
-      seatDiv.addEventListener('dragleave', handleDragLeave);
-      seatDiv.addEventListener('drop', handleDrop);
-      seatDiv.addEventListener('dragend', handleDragEnd);
-
-      // Tap-to-Swap Click Event
-      seatDiv.addEventListener('click', handleSeatClick);
+      if (state.seatingMode === 'free') {
+        seatDiv.className = 'seat free-element';
+        if (person) seatDiv.classList.add('occupied');
+        else seatDiv.classList.add('empty');
+        
+        // Find saved coordinates for this person
+        let x = 0, y = 0;
+        const savedSeat = person ? state.freeSeats.find(s => s.name === person) : null;
+        
+        if (savedSeat && savedSeat.x !== undefined && savedSeat.y !== undefined) {
+          x = savedSeat.x;
+          y = savedSeat.y;
+        } else {
+          // Calculate initial absolute coordinates from grid index
+          const startX = 40;
+          const startY = 40;
+          
+          x = startX;
+          for (let colIdx = 0; colIdx < c; colIdx++) {
+            x += (colWidths[colIdx] === '20px') ? 40 : 130;
+          }
+          y = startY;
+          for (let rowIdx = 0; rowIdx < r; rowIdx++) {
+            y += (rowHeights[rowIdx] === '20px') ? 40 : 90;
+          }
+          
+          // Save calculated coordinates back to state.freeSeats
+          if (person) {
+            state.freeSeats.push({ name: person, x: x, y: y });
+          }
+        }
+        
+        seatDiv.style.left = `${x}px`;
+        seatDiv.style.top = `${y}px`;
+        
+        // Bind absolute element dragging
+        initElementDrag(seatDiv, true);
+      } else {
+        seatDiv.className = 'seat';
+        if (person) seatDiv.classList.add('occupied');
+        else seatDiv.classList.add('empty');
+        
+        seatDiv.setAttribute('draggable', 'true');
+        
+        // Grid mode: Bind HTML5 Drag & Drop Swap events
+        seatDiv.addEventListener('dragstart', handleDragStart);
+        seatDiv.addEventListener('dragover', handleDragOver);
+        seatDiv.addEventListener('dragenter', handleDragEnter);
+        seatDiv.addEventListener('dragleave', handleDragLeave);
+        seatDiv.addEventListener('drop', handleDrop);
+        seatDiv.addEventListener('dragend', handleDragEnd);
+        
+        // Grid mode: Bind Tap-to-Swap Click Event
+        seatDiv.addEventListener('click', handleSeatClick);
+      }
 
       els.seatingGrid.appendChild(seatDiv);
     });
+
+    // In Free mode, render the group frames
+    if (state.seatingMode === 'free') {
+      // Sync canvas has-active-frame class
+      const canvas = els.seatingScrollContainer;
+      if (canvas) {
+        if (state.activeGroupId !== null) {
+          canvas.classList.add('has-active-frame');
+        } else {
+          canvas.classList.remove('has-active-frame');
+        }
+      }
+      state.freeGroups.forEach(group => {
+        addGroupFrame(group);
+      });
+    }
   } else {
     // Roulette result rendering
     const pCount = getParticipants().length;
@@ -1193,7 +1518,7 @@ function swapSeats(draggedIndex, targetIndex) {
   }
 }
 
-function updateHistoryAfterSwap(rows, cols) {
+function updateHistoryAfterSwap(rows, cols, shouldSaveUndo = true) {
   if (state.history.length === 0) return;
   
   const result = [];
@@ -1209,7 +1534,17 @@ function updateHistoryAfterSwap(rows, cols) {
   
   // Update the latest event in history
   state.history[state.history.length - 1].result = result;
+  state.history[state.history.length - 1].seatingLayout = [...state.seatingLayout];
+  state.history[state.history.length - 1].seatingMode = state.seatingMode;
+  state.history[state.history.length - 1].freeSeats = JSON.parse(JSON.stringify(state.freeSeats));
+  state.history[state.history.length - 1].freeGroups = JSON.parse(JSON.stringify(state.freeGroups));
+  state.history[state.history.length - 1].nextGroupId = state.nextGroupId;
   localStorage.setItem('seatingHistory', JSON.stringify(state.history));
+
+  // Undoスタックへの保存
+  if (shouldSaveUndo) {
+    saveStateForUndo();
+  }
 }
 
 // Drag and Drop Event Handlers
@@ -1529,6 +1864,10 @@ function loadSeatingHistoryItem(index) {
   if (!state.history || !state.history[index]) return;
   const item = state.history[index];
   
+  // Undo/Redoスタックの初期化
+  undoStack = [];
+  redoStack = [];
+  
   state.isViewingHistory = true;
   const rows = item.rows;
   const cols = item.cols;
@@ -1539,6 +1878,20 @@ function loadSeatingHistoryItem(index) {
   }
   
   const totalSeats = rows * cols;
+  
+  // Restore seating layout, fallback to all true if missing
+  if (item.seatingLayout) {
+    state.seatingLayout = [...item.seatingLayout];
+  } else {
+    state.seatingLayout = Array.from({ length: totalSeats }, () => true);
+  }
+  
+  // Restore Free Layout elements, fallback if missing
+  state.seatingMode = item.seatingMode || 'grid';
+  state.freeSeats = item.freeSeats ? JSON.parse(JSON.stringify(item.freeSeats)) : [];
+  state.freeGroups = item.freeGroups ? JSON.parse(JSON.stringify(item.freeGroups)) : [];
+  state.nextGroupId = item.nextGroupId || 1;
+  
   state.finalSeatingResult = Array.from({ length: totalSeats }, () => null);
   item.result.forEach(r => {
     state.finalSeatingResult[r.seatIndex] = r.name;
@@ -1610,11 +1963,27 @@ function saveRouletteToHistory(isRetry = false) {
 function runRouletteAnimation() {
   const canvas = els.rouletteCanvas;
   if (!canvas) return;
+  
+  // Set canvas size dynamically based on its visible container
+  let cw = canvas.parentElement.clientWidth;
+  if (cw < 300) cw = 640; // Fallback for when container is hidden or too small
+  canvas.width = cw;
+  canvas.height = cw;
+
   const ctx = canvas.getContext('2d');
-  const participants = getParticipants();
+  
+  let participants = getParticipants();
+  
+  if (state.rouletteRemoveSelected && state.currentRouletteWinners.length > 0) {
+    participants = participants.filter(p => !state.currentRouletteWinners.includes(p));
+  }
+  
   const count = participants.length;
   
-  if (count === 0) return;
+  if (count === 0) {
+    alert('ルーレットを回す参加者がいません。');
+    return;
+  }
 
   // Disable action buttons during spin to prevent double-triggering or state corruption
   [els.retryBtn, els.editBtn].forEach(btn => {
@@ -1713,12 +2082,12 @@ function runRouletteAnimation() {
       window.rouletteAnimFrameId = null;
       
       // Update Winner UI
-      els.rouletteWinnerInput.value = getDisplayName(winner);
+      els.rouletteWinnerInput.value = getDisplayName(state.rouletteWinner);
       els.rouletteWinnerPanel.classList.remove('hidden-section');
       
       // Add to session winners list and update UI
-      if (!state.currentRouletteWinners.includes(winner)) {
-        state.currentRouletteWinners.push(winner);
+      if (!state.currentRouletteWinners.includes(state.rouletteWinner)) {
+        state.currentRouletteWinners.push(state.rouletteWinner);
       }
       updateRouletteSessionWinnersUI(state.currentRouletteWinners);
       
@@ -1733,7 +2102,7 @@ function runRouletteAnimation() {
       
       // Trigger Exclude
       if (state.rouletteRemoveSelected) {
-        removeWinnerFromParticipants(winner);
+        removeWinnerFromParticipants(state.rouletteWinner);
       }
     }
   }
@@ -1809,8 +2178,6 @@ function loadRouletteHistoryItem(index) {
 
   const totalCount = item.initialParticipantsCount || item.participantsCount || 10;
   drawStaticWheel(lastWinner, totalCount);
-
-  const date = new Date(item.timestamp);
   const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   els.resultTitle.innerHTML = `ルーレット結果 <span style="font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); margin-left: 0.5rem; background: rgba(255,255,255,0.08); padding: 0.2rem 0.5rem; border-radius: 6px;">${dateStr} の履歴</span>`;
 }
@@ -1818,6 +2185,12 @@ function loadRouletteHistoryItem(index) {
 function drawStaticWheel(winner, totalCount) {
   const canvas = els.rouletteCanvas;
   if (!canvas) return;
+
+  let cw = canvas.parentElement.clientWidth;
+  if (cw < 300) cw = 640;
+  canvas.width = cw;
+  canvas.height = cw;
+
   const ctx = canvas.getContext('2d');
   const count = totalCount || 10;
   
@@ -1909,6 +2282,700 @@ function updateRouletteSessionWinnersUI(winners) {
   } else {
     container.style.display = 'none';
   }
+}
+
+
+
+function initElementDrag(element, isSeat) {
+  let startLeft = 0, startTop = 0, startWidth = 0, startHeight = 0;
+  let startMouseX = 0, startMouseY = 0;
+  const SNAP = 10; // 10px単位のグリッドスナップ
+  
+  // 席カードもグループ枠も要素全体でドラッグを開始できるようにする
+  // (ただし、枠はz-index: 4に設定し、通常の座席のz-index: 5より下に配置することで、枠内の座席の直接操作を可能にします)
+  const dragTrigger = element;
+  
+  dragTrigger.addEventListener('mousedown', dragMouseDown);
+  dragTrigger.addEventListener('touchstart', dragTouchStart, { passive: false });
+
+  // カーソルの se-resize 変更は CSS (.group-frame-resize-area) に移譲し、ちらつきバグを解消
+
+  function dragMouseDown(e) {
+    if (e.target.closest('button, input, select, .group-color-selector, .color-chip, [contenteditable="true"]')) return;
+    
+    // リサイズ領域をクリックした場合はリサイズを開始する
+    if (!isSeat) {
+      const rect = element.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
+      const resizeThreshold = 30; // リサイズ領域の判定サイズ（px）
+      if (rect.width - offsetX < resizeThreshold && rect.height - offsetY < resizeThreshold) {
+        e.preventDefault();
+        startMouseX = e.clientX;
+        startMouseY = e.clientY;
+        startWidth = element.offsetWidth;
+        startHeight = element.offsetHeight;
+        document.addEventListener('mouseup', closeResizeElement);
+        document.addEventListener('mousemove', elementResize);
+        element.classList.add('resizing');
+        return; // ドラッグ処理ではなくリサイズ処理へ
+      }
+    }
+    
+    e.preventDefault();
+    startMouseX = e.clientX;
+    startMouseY = e.clientY;
+    startLeft = element.offsetLeft;
+    startTop = element.offsetTop;
+    document.addEventListener('mouseup', closeDragElement);
+    document.addEventListener('mousemove', elementDrag);
+    element.classList.add('dragging');
+  }
+
+  function elementResize(e) {
+    e.preventDefault();
+    const diffX = e.clientX - startMouseX;
+    const diffY = e.clientY - startMouseY;
+    
+    // スナップしてリサイズ
+    const newWidth = Math.round((startWidth + diffX) / SNAP) * SNAP;
+    const newHeight = Math.round((startHeight + diffY) / SNAP) * SNAP;
+    
+    element.style.width = `${Math.max(120, newWidth)}px`;
+    element.style.height = `${Math.max(80, newHeight)}px`;
+  }
+
+  function closeResizeElement() {
+    document.removeEventListener('mouseup', closeResizeElement);
+    document.removeEventListener('mousemove', elementResize);
+    element.classList.remove('resizing');
+    saveDraggedCoordinates();
+  }
+
+  function elementDrag(e) {
+    e.preventDefault();
+    const diffX = e.clientX - startMouseX;
+    const diffY = e.clientY - startMouseY;
+    
+    // スナップして移動
+    const newLeft = Math.round((startLeft + diffX) / SNAP) * SNAP;
+    const newTop = Math.round((startTop + diffY) / SNAP) * SNAP;
+    
+    element.style.left = `${Math.max(0, newLeft)}px`;
+    element.style.top = `${Math.max(0, newTop)}px`;
+  }
+
+  function closeDragElement() {
+    document.removeEventListener('mouseup', closeDragElement);
+    document.removeEventListener('mousemove', elementDrag);
+    element.classList.remove('dragging');
+    saveDraggedCoordinates();
+  }
+
+  // タッチ操作対応
+  function dragTouchStart(e) {
+    if (e.target.closest('button, input, select, .group-color-selector, .color-chip, [contenteditable="true"]')) return;
+    const touch = e.touches[0];
+    
+    // リサイズ領域をタッチした場合はリサイズを開始する
+    if (!isSeat) {
+      const rect = element.getBoundingClientRect();
+      const offsetX = touch.clientX - rect.left;
+      const offsetY = touch.clientY - rect.top;
+      const resizeThreshold = 36; // モバイル用には少し大きめの閾値
+      if (rect.width - offsetX < resizeThreshold && rect.height - offsetY < resizeThreshold) {
+        startMouseX = touch.clientX;
+        startMouseY = touch.clientY;
+        startWidth = element.offsetWidth;
+        startHeight = element.offsetHeight;
+        document.addEventListener('touchend', closeTouchResizeElement);
+        document.addEventListener('touchmove', touchElementResize, { passive: false });
+        element.classList.add('resizing');
+        return;
+      }
+    }
+    
+    startMouseX = touch.clientX;
+    startMouseY = touch.clientY;
+    startLeft = element.offsetLeft;
+    startTop = element.offsetTop;
+    document.addEventListener('touchend', closeTouchDragElement);
+    document.addEventListener('touchmove', touchElementDrag, { passive: false });
+    element.classList.add('dragging');
+  }
+
+  function touchElementResize(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const diffX = touch.clientX - startMouseX;
+    const diffY = touch.clientY - startMouseY;
+    
+    const newWidth = Math.round((startWidth + diffX) / SNAP) * SNAP;
+    const newHeight = Math.round((startHeight + diffY) / SNAP) * SNAP;
+    
+    element.style.width = `${Math.max(120, newWidth)}px`;
+    element.style.height = `${Math.max(80, newHeight)}px`;
+  }
+
+  function closeTouchResizeElement() {
+    document.removeEventListener('touchend', closeTouchResizeElement);
+    document.removeEventListener('touchmove', touchElementResize);
+    element.classList.remove('resizing');
+    saveDraggedCoordinates();
+  }
+
+  function touchElementDrag(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const diffX = touch.clientX - startMouseX;
+    const diffY = touch.clientY - startMouseY;
+    
+    const newLeft = Math.round((startLeft + diffX) / SNAP) * SNAP;
+    const newTop = Math.round((startTop + diffY) / SNAP) * SNAP;
+    
+    element.style.left = `${Math.max(0, newLeft)}px`;
+    element.style.top = `${Math.max(0, newTop)}px`;
+  }
+
+  function closeTouchDragElement() {
+    document.removeEventListener('touchend', closeTouchDragElement);
+    document.removeEventListener('touchmove', touchElementDrag);
+    element.classList.remove('dragging');
+    saveDraggedCoordinates();
+  }
+
+  function saveDraggedCoordinates() {
+    const rows = parseInt(els.seatingRows.value) || 0;
+    const cols = parseInt(els.seatingCols.value) || 0;
+
+    if (isSeat) {
+      const idx = parseInt(element.dataset.index);
+      const name = state.finalSeatingResult[idx];
+      if (name) {
+        let seatData = state.freeSeats.find(s => s.name === name);
+        if (!seatData) {
+          seatData = { name: name };
+          state.freeSeats.push(seatData);
+        }
+        seatData.x = element.offsetLeft;
+        seatData.y = element.offsetTop;
+      }
+    } else {
+      const groupId = parseInt(element.dataset.groupId);
+      const groupData = state.freeGroups.find(g => g.id === groupId);
+      if (groupData) {
+        groupData.x = element.offsetLeft;
+        groupData.y = element.offsetTop;
+        groupData.w = element.offsetWidth;
+        groupData.h = element.offsetHeight;
+      }
+    }
+    updateHistoryAfterSwap(rows, cols);
+  }
+}
+
+function hexToRgb(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
+}
+
+function applyGroupFrameColor(frame, hexColor) {
+  const bg = frame.querySelector('.group-frame-bg') || frame;
+  bg.style.borderColor = hexColor;
+  
+  // 半透明の背景色を設定 (hexColor を rgba に変換)
+  const rgb = hexToRgb(hexColor);
+  if (rgb) {
+    bg.style.backgroundColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.05)`;
+    frame.style.setProperty('--frame-glow', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`);
+    frame.style.setProperty('--frame-glow-light', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`);
+  } else {
+    bg.style.backgroundColor = `${hexColor}10`; // hex alpha fallback
+    frame.style.setProperty('--frame-glow', hexColor);
+    frame.style.setProperty('--frame-glow-light', hexColor);
+  }
+  
+  // ヘッダー内のラベルの色も同調
+  const label = frame.querySelector('.group-frame-label');
+  if (label) {
+    label.style.color = hexColor;
+  }
+}
+
+function setActiveGroup(groupId) {
+  state.activeGroupId = groupId;
+  
+  const canvas = els.seatingScrollContainer;
+  if (canvas) {
+    if (groupId !== null) {
+      canvas.classList.add('has-active-frame');
+    } else {
+      canvas.classList.remove('has-active-frame');
+    }
+  }
+  
+  document.querySelectorAll('.group-frame').forEach(frame => {
+    const fId = parseInt(frame.dataset.groupId);
+    if (fId === groupId) {
+      frame.classList.add('active-frame');
+    } else {
+      frame.classList.remove('active-frame');
+    }
+  });
+}
+
+function addGroupFrame(groupData) {
+  const container = els.seatingGrid;
+  if (!container) return;
+
+  const frame = document.createElement('div');
+  frame.className = 'group-frame';
+  frame.dataset.groupId = groupData.id;
+  if (state.activeGroupId === groupData.id) {
+    frame.classList.add('active-frame');
+  }
+  
+  // 背景要素を追加 (z-indexスタッキング制御用)
+  const frameBg = document.createElement('div');
+  frameBg.className = 'group-frame-bg';
+  frame.appendChild(frameBg);
+  
+  frame.style.left = `${groupData.x}px`;
+  frame.style.top = `${groupData.y}px`;
+  frame.style.width = `${groupData.w}px`;
+  frame.style.height = `${groupData.h}px`;
+
+  // 枠クリック／タッチでアクティブ化
+  const selectHandler = (e) => {
+    if (e.target.closest('button, input, select, .group-color-selector, .color-chip, [contenteditable="true"]')) return;
+    setActiveGroup(groupData.id);
+  };
+  frame.addEventListener('mousedown', selectHandler);
+  frame.addEventListener('touchstart', selectHandler, { passive: true });
+
+  // ヘッダー要素
+  const header = document.createElement('div');
+  header.className = 'group-frame-header';
+
+  // ドラッグ用ハンドル
+  const handle = document.createElement('span');
+  handle.className = 'group-frame-handle';
+  handle.innerHTML = '⠿';
+  handle.title = 'ここをドラッグして班を移動';
+  handle.setAttribute('data-html2canvas-ignore', 'true');
+
+  // 編集可能な班名ラベル
+  const label = document.createElement('span');
+  label.className = 'group-frame-label';
+  label.contentEditable = 'true';
+  label.textContent = groupData.name;
+  label.title = 'クリックで名前を編集';
+  
+  label.addEventListener('blur', () => {
+    groupData.name = label.textContent.trim() || `班 ${groupData.id}`;
+    label.textContent = groupData.name;
+    const rows = parseInt(els.seatingRows.value) || 0;
+    const cols = parseInt(els.seatingCols.value) || 0;
+    updateHistoryAfterSwap(rows, cols);
+  });
+
+  label.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      label.blur();
+    }
+  });
+
+  // コントロール（パレット＆削除ボタン）のコンテナ
+  const controls = document.createElement('div');
+  controls.className = 'group-frame-controls';
+
+  // パレットトグルボタン (🎨)
+  const paletteBtn = document.createElement('button');
+  paletteBtn.className = 'group-frame-palette-btn';
+  paletteBtn.innerHTML = '🎨';
+  paletteBtn.title = '枠の色を変更';
+  paletteBtn.setAttribute('data-html2canvas-ignore', 'true');
+
+  // カラーセレクターポップアップ
+  const colorSelector = document.createElement('div');
+  colorSelector.className = 'group-color-selector';
+  colorSelector.style.display = 'none';
+  colorSelector.setAttribute('data-html2canvas-ignore', 'true');
+  
+  // ポップアップ自体をクリックしても閉じないようにする（ネイティブカラーピッカー保護）
+  colorSelector.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+
+  // プリセットカラー
+  const presets = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316'];
+  presets.forEach(color => {
+    const chip = document.createElement('div');
+    chip.className = 'color-chip';
+    chip.style.backgroundColor = color;
+    chip.title = color;
+    chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      groupData.color = color;
+      applyGroupFrameColor(frame, color);
+      colorSelector.style.display = 'none';
+      
+      const rows = parseInt(els.seatingRows.value) || 0;
+      const cols = parseInt(els.seatingCols.value) || 0;
+      updateHistoryAfterSwap(rows, cols);
+    });
+    colorSelector.appendChild(chip);
+  });
+
+  // カスタムカラー (虹色チップに隠し input[type="color"])
+  const customChip = document.createElement('div');
+  customChip.className = 'color-chip custom-picker-wrapper';
+  customChip.title = 'カスタム色を選択';
+
+  const colorPicker = document.createElement('input');
+  colorPicker.type = 'color';
+  colorPicker.className = 'group-frame-color-picker';
+  colorPicker.value = groupData.color || '#3b82f6';
+
+  colorPicker.addEventListener('input', (e) => {
+    const newColor = e.target.value;
+    groupData.color = newColor;
+    applyGroupFrameColor(frame, newColor);
+  });
+
+  colorPicker.addEventListener('change', () => {
+    const rows = parseInt(els.seatingRows.value) || 0;
+    const cols = parseInt(els.seatingCols.value) || 0;
+    updateHistoryAfterSwap(rows, cols);
+  });
+
+  customChip.appendChild(colorPicker);
+  colorSelector.appendChild(customChip);
+
+  // パレットボタンクリックでトグル
+  paletteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isVisible = colorSelector.style.display === 'flex';
+    document.querySelectorAll('.group-color-selector').forEach(sel => {
+      sel.style.display = 'none';
+    });
+    colorSelector.style.display = isVisible ? 'none' : 'flex';
+  });
+
+  // 削除ボタン
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'group-frame-delete';
+  deleteBtn.innerHTML = '×';
+  deleteBtn.title = 'この枠を削除';
+  deleteBtn.setAttribute('data-html2canvas-ignore', 'true');
+  
+  deleteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (confirm(`班の枠 「${groupData.name}」 を削除しますか？ (中の席カードは削除されません)`)) {
+      if (state.activeGroupId === groupData.id) {
+        setActiveGroup(null);
+      }
+      frame.remove();
+      state.freeGroups = state.freeGroups.filter(g => g.id !== groupData.id);
+      
+      const rows = parseInt(els.seatingRows.value) || 0;
+      const cols = parseInt(els.seatingCols.value) || 0;
+      updateHistoryAfterSwap(rows, cols);
+    }
+  });
+
+  // ドキュメントクリックで閉じる
+  const closeSelector = () => {
+    colorSelector.style.display = 'none';
+  };
+  document.addEventListener('click', closeSelector);
+
+  header.appendChild(handle);
+  header.appendChild(label);
+  controls.appendChild(paletteBtn);
+  controls.appendChild(deleteBtn);
+  header.appendChild(controls);
+  frame.appendChild(header);
+  frame.appendChild(colorSelector);
+
+  // リサイズ用ハンドルエリア (右下)
+  const resizeArea = document.createElement('div');
+  resizeArea.className = 'group-frame-resize-area';
+  frame.appendChild(resizeArea);
+
+  // 初回の色適用
+  applyGroupFrameColor(frame, groupData.color || '#3b82f6');
+
+  // Resize end detection to save dimensions
+  let resizeTimeout;
+  const resizeObserver = new ResizeObserver(entries => {
+    for (let entry of entries) {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        const { width, height } = entry.contentRect;
+        if (Math.abs(groupData.w - width) > 5 || Math.abs(groupData.h - height) > 5) {
+          groupData.w = Math.round(width);
+          groupData.h = Math.round(height);
+          const rows = parseInt(els.seatingRows.value) || 0;
+          const cols = parseInt(els.seatingCols.value) || 0;
+          updateHistoryAfterSwap(rows, cols);
+        }
+      }, 300);
+    }
+  });
+  resizeObserver.observe(frame);
+
+  initElementDrag(frame, false);
+  container.appendChild(frame);
+}
+
+function toggleFreeLayoutMode(mode) {
+  state.seatingMode = mode;
+  setActiveGroup(null);
+  
+  const rows = parseInt(els.seatingRows.value) || 0;
+  const cols = parseInt(els.seatingCols.value) || 0;
+
+  if (mode === 'free') {
+    // UI states
+    els.btnSeatingGridMode.classList.remove('active');
+    els.btnSeatingGridMode.style.color = 'var(--text-secondary)';
+    els.btnSeatingFreeMode.classList.add('active');
+    els.btnSeatingFreeMode.style.color = '#ffffff';
+
+    els.btnAddGroupFrame.style.display = 'flex';
+    els.btnResetLayout.style.display = 'flex';
+    els.seatingInstructionHint.textContent = '💡 席カードや班の枠をドラッグして、自由なレイアウトやチーム分けをデザインできます！';
+
+    // UI Container adjustments
+    els.seatingScrollContainer.classList.add('free-layout-canvas');
+    els.seatingGrid.style.display = 'block'; 
+    els.seatingGrid.style.width = '100%';
+    els.seatingGrid.style.minWidth = '800px';
+    els.seatingGrid.style.height = '500px';
+    
+  } else {
+    // UI states
+    els.btnSeatingGridMode.classList.add('active');
+    els.btnSeatingGridMode.style.color = '#ffffff';
+    els.btnSeatingFreeMode.classList.remove('active');
+    els.btnSeatingFreeMode.style.color = 'var(--text-secondary)';
+
+    els.btnAddGroupFrame.style.display = 'none';
+    els.btnResetLayout.style.display = 'none';
+    els.seatingInstructionHint.textContent = '💡 席をドラッグ＆ドロップ、または2つの席を順番にタップすることで、自由に配置を入れ替えられます！';
+
+    // UI Container adjustments
+    els.seatingScrollContainer.classList.remove('free-layout-canvas');
+    els.seatingGrid.style.display = 'grid'; 
+    els.seatingGrid.style.width = 'max-content';
+    els.seatingGrid.style.minWidth = 'unset';
+    els.seatingGrid.style.height = 'auto';
+  }
+
+  // Save mode to current active history event
+  if (state.history.length > 0) {
+    state.history[state.history.length - 1].seatingMode = mode;
+  }
+
+  showResult();
+  updateHistoryAfterSwap(rows, cols);
+}
+
+function resetToGridLayout() {
+  state.freeSeats = [];
+  state.freeGroups = [];
+  state.seatingMode = 'grid';
+  state.nextGroupId = 1;
+  setActiveGroup(null);
+  
+  // Remove all group frames from DOM
+  document.querySelectorAll('.group-frame').forEach(f => f.remove());
+
+  // UI state adjustment
+  els.btnSeatingGridMode.classList.add('active');
+  els.btnSeatingGridMode.style.color = '#ffffff';
+  els.btnSeatingFreeMode.classList.remove('active');
+  els.btnSeatingFreeMode.style.color = 'var(--text-secondary)';
+
+  els.btnAddGroupFrame.style.display = 'none';
+  els.btnResetLayout.style.display = 'none';
+  els.seatingInstructionHint.textContent = '💡 席をドラッグ＆ドロップ、または2つの席を順番にタップすることで、自由に配置を入れ替えられます！';
+
+  els.seatingScrollContainer.classList.remove('free-layout-canvas');
+  els.seatingGrid.style.display = 'grid';
+  els.seatingGrid.style.width = 'max-content';
+  els.seatingGrid.style.minWidth = 'unset';
+  els.seatingGrid.style.height = 'auto';
+
+  if (state.history.length > 0) {
+    state.history[state.history.length - 1].seatingMode = 'grid';
+    state.history[state.history.length - 1].freeSeats = [];
+    state.history[state.history.length - 1].freeGroups = [];
+  }
+
+  showResult();
+  
+  const rows = parseInt(els.seatingRows.value) || 0;
+  const cols = parseInt(els.seatingCols.value) || 0;
+  updateHistoryAfterSwap(rows, cols);
+}
+
+// Undo / Redo core logic
+function getSnapshot() {
+  return {
+    finalSeatingResult: JSON.parse(JSON.stringify(state.finalSeatingResult)),
+    freeSeats: JSON.parse(JSON.stringify(state.freeSeats)),
+    freeGroups: JSON.parse(JSON.stringify(state.freeGroups)),
+    seatingMode: state.seatingMode,
+    nextGroupId: state.nextGroupId,
+    activeGroupId: state.activeGroupId
+  };
+}
+
+function applySnapshot(snapshot) {
+  state.finalSeatingResult = JSON.parse(JSON.stringify(snapshot.finalSeatingResult));
+  state.freeSeats = JSON.parse(JSON.stringify(snapshot.freeSeats));
+  state.freeGroups = JSON.parse(JSON.stringify(snapshot.freeGroups));
+  state.seatingMode = snapshot.seatingMode;
+  state.nextGroupId = snapshot.nextGroupId;
+  state.activeGroupId = snapshot.activeGroupId !== undefined ? snapshot.activeGroupId : null;
+
+  // 再描画
+  showResult();
+  
+  // Set active group visually
+  setActiveGroup(state.activeGroupId);
+
+  // 履歴更新 (Undoスタックへの重複プッシュは防ぐ)
+  const rows = parseInt(els.seatingRows.value) || 0;
+  const cols = parseInt(els.seatingCols.value) || 0;
+  updateHistoryAfterSwap(rows, cols, false);
+}
+
+function saveStateForUndo() {
+  const snapshot = getSnapshot();
+
+  // 重複プッシュの防止
+  if (undoStack.length > 0) {
+    const last = undoStack[undoStack.length - 1];
+    if (JSON.stringify(last) === JSON.stringify(snapshot)) {
+      return;
+    }
+  }
+
+  undoStack.push(snapshot);
+  if (undoStack.length > 30) {
+    undoStack.shift();
+  }
+  redoStack = []; // 新たな操作がされたためやり直しスタックはクリア
+  updateUndoRedoButtons();
+}
+
+function handleUndo() {
+  if (undoStack.length <= 1) return;
+
+  const current = undoStack.pop();
+  redoStack.push(current);
+
+  const previous = undoStack[undoStack.length - 1];
+  applySnapshot(previous);
+  updateUndoRedoButtons();
+}
+
+function handleRedo() {
+  if (redoStack.length === 0) return;
+
+  const next = redoStack.pop();
+  undoStack.push(next);
+
+  applySnapshot(next);
+  updateUndoRedoButtons();
+}
+
+function updateUndoRedoButtons() {
+  if (els.btnUndo && els.btnRedo) {
+    els.btnUndo.disabled = undoStack.length <= 1;
+    els.btnRedo.disabled = redoStack.length === 0;
+  }
+}
+
+function downloadSeatingImage() {
+  const captureArea = document.getElementById('seating-capture-area');
+  const scrollContainer = els.seatingScrollContainer;
+  if (!captureArea || !scrollContainer) return;
+
+  // 選択状態の枠があれば事前に解除する
+  setActiveGroup(null);
+
+  // ボタンをローディング状態にする
+  const btn = els.btnDownloadSeating;
+  if (!btn) return;
+  const originalBtnHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `⏳ 保存中...`;
+
+  setTimeout(() => {
+    // スクロールコンテナがクリップされるのを防ぐため、一時的にオーバーフローを可視化する
+    const origOverflowX = scrollContainer.style.overflowX;
+    const origOverflowY = scrollContainer.style.overflowY;
+    const origOverflow = scrollContainer.style.overflow;
+    
+    scrollContainer.style.overflow = 'visible';
+    
+    // テーマに合わせた確実な背景色を取得（CSS変数にコメントが含まれる場合のパースエラーを防ぐ）
+    const themeBg = state.theme === 'light' ? '#f1f5f9' : '#0a0e1a';
+    
+    // キャプチャエリアに一時的に背景色を設定（透過要素の白飛びを確実に防ぐ）
+    const origBgColor = captureArea.style.backgroundColor;
+    captureArea.style.backgroundColor = themeBg;
+
+    html2canvas(captureArea, {
+      backgroundColor: themeBg,
+      scale: 2, // 高解像度で書き出し
+      useCORS: true,
+      logging: false,
+      onclone: (clonedDoc) => {
+        // キャプチャ時（クローン時）にアニメーションを無効化し、白飛びを防ぐ
+        const style = clonedDoc.createElement('style');
+        style.innerHTML = '* { animation: none !important; transition: none !important; transform: none !important; opacity: 1 !important; } .seat-card { animation: none !important; transform: none !important; opacity: 1 !important; } .empty-seat { background: transparent !important; }';
+        clonedDoc.head.appendChild(style);
+      }
+    }).then(canvas => {
+      // スタイルを元に戻す
+      scrollContainer.style.overflow = origOverflow;
+      scrollContainer.style.overflowX = origOverflowX;
+      scrollContainer.style.overflowY = origOverflowY;
+      captureArea.style.backgroundColor = origBgColor;
+
+      // ボタンを元に戻す
+      btn.disabled = false;
+      btn.innerHTML = originalBtnHTML;
+
+      // ダウンロードリンクを生成してクリック
+      const link = document.createElement('a');
+      const date = new Date();
+      const dateStr = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}`;
+      link.download = `座席配置_${dateStr}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }).catch(err => {
+      console.error('Image export failed:', err);
+      // エラー時もスタイルとボタンを復元
+      scrollContainer.style.overflow = origOverflow;
+      scrollContainer.style.overflowX = origOverflowX;
+      scrollContainer.style.overflowY = origOverflowY;
+      captureArea.style.backgroundColor = origBgColor;
+      btn.disabled = false;
+      btn.innerHTML = originalBtnHTML;
+      alert('画像の保存に失敗しました。ブラウザのセキュリティ制限等をご確認ください。');
+    });
+  }, 150); // アクティブ解除のアニメーション完了を待つ時間
 }
 
 // Start

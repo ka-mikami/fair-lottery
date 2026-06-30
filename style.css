@@ -259,7 +259,7 @@ textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0
   color: #fff;
   border-color: var(--accent-color);
 }
-.result-scroll { max-height: 65vh; overflow-y: auto; overflow-x: auto; width: 100%; margin-bottom: 2rem; padding-right: 0.5rem; }
+.result-scroll { max-height: none; overflow: visible; width: 100%; margin-bottom: 2rem; }
 .result-scroll::-webkit-scrollbar { width: 8px; }
 .result-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
 #result-list {
@@ -1115,5 +1115,486 @@ body.light-theme .session-winner-item:hover {
 }
 body.light-theme .session-winner-item.active-winner {
   background: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* ==========================================================================
+   座席レイアウトエディタ (カスタム席替え) 用スタイル
+   ========================================================================== */
+
+/* エディタのミニセル */
+.editor-seat {
+  width: 42px;
+  height: 36px;
+  background: rgba(59, 130, 246, 0.22);
+  border: 1px solid var(--accent-color);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fff;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+.editor-seat:hover {
+  background: rgba(59, 130, 246, 0.45);
+  transform: scale(1.05);
+}
+.editor-seat.aisle {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px dashed var(--glass-border);
+  color: var(--text-secondary);
+}
+.editor-seat.aisle:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* ライトテーマ用のエディタ調整 */
+body.light-theme .editor-seat {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--accent-color);
+  border-color: rgba(37, 99, 235, 0.4);
+}
+body.light-theme .editor-seat:hover {
+  background: rgba(37, 99, 235, 0.25);
+}
+body.light-theme .editor-seat.aisle {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: rgba(0, 0, 0, 0.35);
+}
+
+/* 結果画面の通路（完全に消し去って机スペースのみ残す） */
+/* 結果画面の通路（完全に消し去って机スペースのみ残す） */
+.seat.aisle {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+/* ==========================================================================
+   フリー配置（draw.io風）モード用スタイル
+   ========================================================================== */
+
+/* ツールバーのタブボタン調整 */
+.toolbar-tab {
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  padding: 0.4rem 1.2rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.toolbar-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+.toolbar-tab.active {
+  background: var(--accent-color) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+body.light-theme .toolbar-tab:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* ツールバーのボタン（Undo / Redo） */
+.toolbar-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.toolbar-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+.toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+body.light-theme .toolbar-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* キャンバスコンテナ（Figma/draw.ioライクなドットグリッド背景） */
+.free-layout-canvas {
+  position: relative;
+  width: 100%;
+  height: 520px; /* 固定高さ、スクロール対応 */
+  background-color: rgba(15, 23, 42, 0.6); /* 深めの背景色 */
+  background-image: radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+  background-size: 24px 24px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  overflow: auto; /* 子要素がはみ出た際にスクロール可能 */
+  transition: background-color 0.3s, border-color 0.3s;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+body.light-theme .free-layout-canvas {
+  background-color: rgba(248, 250, 252, 0.8);
+  background-image: radial-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* フリー配置時の座席カード */
+.seat.free-element {
+  position: absolute;
+  margin: 0 !important;
+  z-index: 5;
+  cursor: grab;
+  user-select: none;
+  transition: box-shadow 0.2s, transform 0.2s;
+  will-change: left, top;
+}
+.seat.free-element:active,
+.seat.free-element.dragging {
+  cursor: grabbing;
+  z-index: 100;
+  transform: scale(1.02);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), 0 0 0 2px var(--accent-color);
+}
+body.light-theme .seat.free-element:active,
+body.light-theme .seat.free-element.dragging {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 0 0 2px var(--accent-color);
+}
+
+/* グループ枠（班の枠） */
+.group-frame {
+  position: absolute;
+  border-radius: 8px;
+  min-width: 120px;
+  min-height: 80px;
+  cursor: move; /* 枠全体のどこを掴んでも移動可能 */
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* 新設：枠の背景・枠線レイヤー */
+.group-frame-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 2px dashed #3b82f6; /* 初期ボーダー色 */
+  background: rgba(59, 130, 246, 0.05); /* 初期背景色 */
+  border-radius: 8px;
+  z-index: 2; /* 通常は座席 (z-index: 5) より下 */
+  pointer-events: none; /* ドラッグや選択のイベントは親の .group-frame が受け取るため透過 */
+  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+
+/* 右下のリサイズグラブハンドルの可視化 */
+.group-frame::after {
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 14px; /* 8px から 14px に拡大し、より掴みやすく */
+  height: 14px;
+  border-right: 2.5px solid rgba(255, 255, 255, 0.5); /* 太く、見やすく */
+  border-bottom: 2.5px solid rgba(255, 255, 255, 0.5);
+  pointer-events: none; /* リサイズ操作自体を邪魔しない */
+  transition: all 0.2s;
+  z-index: 7; /* 座席 (z-index: 5) より上に配置し常にリサイズ可能にする */
+}
+body.light-theme .group-frame::after {
+  border-right-color: rgba(0, 0, 0, 0.45);
+  border-bottom-color: rgba(0, 0, 0, 0.45);
+}
+.group-frame.active-frame::after {
+  width: 18px; /* 11px から 18px に拡大 */
+  height: 18px;
+  border-right: 3px solid currentColor;
+  border-bottom: 3px solid currentColor;
+  bottom: 5px;
+  right: 5px;
+}
+
+/* ホバーフィルターを削除し、再描画のチラつきバグを防止 */
+
+.group-frame.dragging {
+  z-index: 99 !important; /* ドラッグ中は他のすべての要素（座席含む）より上にする */
+}
+.group-frame.dragging .group-frame-bg {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  filter: brightness(1.15);
+}
+body.light-theme .group-frame.dragging .group-frame-bg {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  filter: brightness(0.95);
+}
+
+/* アクティブなグループ枠（選択中） */
+.group-frame.active-frame .group-frame-bg {
+  z-index: 4; /* 座席 (z-index: 5) より下だが非アクティブ枠 (z-index: 2) より上 */
+  border-style: solid !important;
+  border-width: 2.5px !important;
+  box-shadow: 0 0 16px var(--frame-glow, rgba(59, 130, 246, 0.5)), 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+}
+body.light-theme .group-frame.active-frame .group-frame-bg {
+  box-shadow: 0 0 16px var(--frame-glow-light, rgba(37, 99, 235, 0.4)), 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 非アクティブなグループ枠の減光（フォーカスモード） */
+.free-layout-canvas.has-active-frame .group-frame:not(.active-frame) {
+  opacity: 0.45;
+  filter: grayscale(35%) brightness(0.9);
+}
+body.light-theme .free-layout-canvas.has-active-frame .group-frame:not(.active-frame) {
+  filter: grayscale(35%) brightness(1.02);
+}
+
+/* 非アクティブな枠のリサイズガイドマークを非表示に */
+.free-layout-canvas.has-active-frame .group-frame:not(.active-frame)::after {
+  opacity: 0.2;
+}
+
+/* アクティブな枠のヘッダー強調 */
+.group-frame.active-frame .group-frame-header {
+  border-bottom-style: solid;
+  border-bottom-color: currentColor; /* JSで設定されたラベル文字色と同調 */
+}
+
+/* グループ枠のヘッダー・ラベル */
+.group-frame-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1.5px solid rgba(255, 255, 255, 0.15); /* 境界線をより明確に */
+  padding: 4px 8px; /* 余白を削ってヘッダーをスリム化 */
+  user-select: none;
+  position: relative;
+  z-index: 6; /* 座席 (z-index: 5) より上に配置 */
+  background-color: rgba(0, 0, 0, 0.01); /* 透明によるヒットテスト貫通バグを防ぐため、1%だけ不透明にする */
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  gap: 6px; /* 子要素間の隙間を詰める */
+}
+body.light-theme .group-frame-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+  background-color: rgba(0, 0, 0, 0.01);
+}
+
+/* リサイズ用の透明なカーソル判定エリア */
+.group-frame-resize-area {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 36px;
+  height: 36px;
+  cursor: se-resize;
+  z-index: 10;
+}
+
+/* ドラッグ用ハンドルマーク */
+.group-frame-handle {
+  cursor: move;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  padding: 0 4px;
+  user-select: none;
+  font-weight: normal;
+  margin-right: 4px;
+  display: inline-block;
+  transition: color 0.15s;
+}
+.group-frame-handle:hover {
+  color: var(--text-primary);
+}
+
+.group-frame-label {
+  font-size: 0.88rem; /* 文字サイズを少し小さくしてスリム化 */
+  font-weight: 800;
+  color: #3b82f6; /* JSで動的に変更されます */
+  background: rgba(255, 255, 255, 0.03); /* タップ・クリック領域を認識しやすくするため、かすかな背景を設定 */
+  border: 1px solid rgba(255, 255, 255, 0.08); /* 編集可能領域の境界線を付与 */
+  outline: none;
+  cursor: text;
+  max-width: 65%; /* ボタンサイズ拡大に合わせて領域を最大化 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 2px 6px; /* 縦横のパディングを削ってスリム化 */
+  border-radius: 4px;
+  transition: all 0.2s;
+  flex: 1; /* 横幅いっぱいに広げてクリック可能な領域を極大化 */
+  min-width: 50px;
+}
+.group-frame-label:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.group-frame-label:focus {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+body.light-theme .group-frame-label {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.05);
+}
+body.light-theme .group-frame-label:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+body.light-theme .group-frame-label:focus {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+/* コントロール用コンテナ（パレット＆削除ボタン） */
+.group-frame-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* パレットトグルボタン */
+.group-frame-palette-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.85rem;
+  cursor: pointer;
+  width: 24px; /* タップ領域を縮小してスリム化 */
+  height: 24px;
+  border-radius: 4px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.group-frame-palette-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+body.light-theme .group-frame-palette-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+body.light-theme .group-frame-palette-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* カラーセレクターポップアップパネル */
+.group-color-selector {
+  position: absolute;
+  top: 32px; /* ヘッダーの高さが下がったのに合わせて調整 */
+  right: 8px;
+  background: rgba(30, 41, 59, 0.95); /* ダークなガラスモーフィズム */
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  gap: 6px;
+  z-index: 110; /* 最前面に表示 */
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  animation: popSelector 0.12s ease-out;
+}
+body.light-theme .group-color-selector {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+@keyframes popSelector {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* カラーチップ */
+.color-chip {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
+}
+.color-chip:hover {
+  transform: scale(1.25);
+}
+body.light-theme .color-chip {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* カスタムカラーチップ（虹色背景にカラーピッカーを内蔵） */
+.color-chip.custom-picker-wrapper {
+  position: relative;
+  background: conic-gradient(
+    #ff0000 0%, #ffff00 17%, #00ff00 33%, 
+    #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%
+  );
+}
+.color-chip.custom-picker-wrapper input[type="color"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0; /* 完全透明にして重ねる */
+  cursor: pointer;
+  padding: 0;
+  border: none;
+}
+
+/* 枠削除ボタン */
+.group-frame-delete {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--danger-color);
+  font-size: 0.9rem;
+  cursor: pointer;
+  width: 24px; /* タップ領域を縮小してスリム化 */
+  height: 24px;
+  border-radius: 4px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.group-frame-delete:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ff6b6b;
+  transform: scale(1.05);
+}
+body.light-theme .group-frame-delete {
+  background: rgba(220, 38, 38, 0.06);
+  border-color: rgba(220, 38, 38, 0.15);
+  color: #dc2626;
+}
+body.light-theme .group-frame-delete:hover {
+  background: rgba(220, 38, 38, 0.15);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: #b91c1c;
 }
 
